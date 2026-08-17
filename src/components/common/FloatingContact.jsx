@@ -1,0 +1,45 @@
+import { Phone } from "lucide-react";
+
+import { FOOTER_CONTACT, WHATSAPP_NUMBER } from "@/data/footer";
+import WhatsappIcon from "./WhatsappIcon";
+
+/**
+ * WhatsApp and call, parked bottom-right on every shop page.
+ *
+ * Two links and nothing else -- no expanding FAB, no live-chat widget, no unread badge. The
+ * jewelry build's version carries all of that because it wraps Zoho SalesIQ; there is no chat
+ * provider here, so the toggle would only be a lid over two buttons that already fit on screen.
+ *
+ * Server component: the hrefs are constants, so this needs no JavaScript.
+ *
+ * The mobile offset clears the fixed bottom bars the PDP and PLP put on small screens (both are
+ * roughly 4rem tall); from lg those bars are gone or move to the top, so it drops back down.
+ *
+ * ponytail: one static WhatsApp message. Per-page context ("about this product: X") means a client
+ * component reading the pathname -- add it when someone actually wants to know which page an
+ * enquiry came from.
+ */
+export default function FloatingContact() {
+  return (
+    <div className="fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 flex flex-col gap-3 lg:right-6 lg:bottom-6">
+      <a
+        href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+          "Hi, I want to know more about Material.",
+        )}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat with us on WhatsApp"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      >
+        <WhatsappIcon className="h-6 w-6" />
+      </a>
+      <a
+        href={`tel:${FOOTER_CONTACT.phone.replace(/\s/g, "")}`}
+        aria-label={`Call us on ${FOOTER_CONTACT.phone}`}
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-ink text-white shadow-lg transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      >
+        <Phone className="h-5 w-5" strokeWidth={2} aria-hidden />
+      </a>
+    </div>
+  );
+}
