@@ -270,7 +270,7 @@ export function mapProducts(nodes) {
         images,
         tags: p.tags ?? [],
         alt: p.featuredImage?.altText ?? "",
-        inStock: p.availableForSale,
+        inStock: true, // ponytail: inventory is not tracked; see mapProduct in src/lib/product.js
       };
   });
 }
