@@ -326,12 +326,11 @@ function mapCart(cart) {
       // ponytail: inventory is not tracked, so a cart line is never blocked as out of stock.
       // CartPage's out-of-stock banner self-disables; it returns if stock is ever tracked again.
       inStock: true,
-      // Only surfaced when it is low AND real. Shopify returns null when inventory is untracked,
-      // and "only 3 left" invented from a null is the fake-scarcity trick this store does not do.
-      stockLeft:
-        typeof line.merchandise?.quantityAvailable === "number"
-          ? line.merchandise.quantityAvailable
-          : null,
+      // ponytail: always null -- inventory is not tracked here (see inStock above), so a tracked
+      // variant sitting at 0 was reporting a real `0`, which rendered "Only 0 left" and blocked
+      // checkout on hasShortLine. Null is the "not saying" value both already handle. Restore the
+      // quantityAvailable read the day stock is real, and the low-stock note comes back with it.
+      stockLeft: null,
       // Per line, in kg — a customer moving 224kg should be able to see which line is the weight.
       weightKg:
         Math.round(
