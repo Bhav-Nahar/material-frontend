@@ -163,7 +163,12 @@ function mapProduct(p) {
     category: p.productType || null,
     vendor: p.vendor || null,
     tags: p.tags ?? [],
-    inStock: p.availableForSale,
+    // ponytail: always sellable. Material does not track inventory -- tiles and laminates are
+    // ordered in from the depot per order, so Shopify's availableForSale (false only when a
+    // variant is tracked, at 0, and set to stop selling) describes a warehouse we do not run.
+    // Requires those variants set to "Continue selling when out of stock" in Shopify, or order
+    // creation fails AFTER payment. Read p.availableForSale again the day stock is real.
+    inStock: true,
     seo: p.seo ?? {},
     media,
     collection,
@@ -206,7 +211,7 @@ function mapVariant(v) {
     id: v.id,
     title: v.title,
     sku: v.sku || null,
-    inStock: v.availableForSale,
+    inStock: true, // ponytail: see mapProduct -- inventory is not tracked
     // Shopify only reports this when inventory is tracked AND the product is published to this
     // channel; null means "not saying", which is not the same as none.
     stock: v.quantityAvailable ?? null,

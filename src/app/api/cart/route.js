@@ -323,7 +323,9 @@ function mapCart(cart) {
       image: line.merchandise?.image?.url ?? null,
       price: Number(line.merchandise?.price?.amount ?? 0),
       comparePrice: Number(line.merchandise?.compareAtPrice?.amount ?? 0) || null,
-      inStock: line.merchandise?.availableForSale !== false,
+      // ponytail: inventory is not tracked, so a cart line is never blocked as out of stock.
+      // CartPage's out-of-stock banner self-disables; it returns if stock is ever tracked again.
+      inStock: true,
       // Only surfaced when it is low AND real. Shopify returns null when inventory is untracked,
       // and "only 3 left" invented from a null is the fake-scarcity trick this store does not do.
       stockLeft:
