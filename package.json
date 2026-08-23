@@ -12,8 +12,6 @@
     "fonts": "node scripts/fetch-fonts.mjs",
     "menu": "node scripts/generate-menu.mjs",
     "verify:product": "node scripts/verify-product.mjs",
-    "verify:reviews": "node scripts/verify-reviews.mjs",
-    "verify:photos": "node scripts/verify-review-photos.mjs",
     "shopify:token": "node scripts/shopify-token.mjs",
     "product:create": "node scripts/create-test-product.mjs"
   },
