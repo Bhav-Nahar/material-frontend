@@ -48,6 +48,17 @@ const LIGHTBOX_INSET_X = "clamp(0.5rem, 3vw, 4rem)";
 const LIGHTBOX_INSET_Y = "clamp(1rem, 7vh, 5rem)";
 
 /**
+ * Swipe thresholds in the lightbox, in CSS pixels of horizontal travel.
+ *
+ * SWIPE_MIN is what counts as "next picture" -- low enough that a flick across a phone registers,
+ * high enough that the wobble in a tap on a moving train does not. TAP_MAX is the opposite end:
+ * past it the gesture was a drag that fell short, and zooming on it would be the wrong answer to
+ * a movement the shopper meant as a swipe.
+ */
+const SWIPE_MIN = 45;
+const TAP_MAX = 12;
+
+/**
  * Room kept at the bottom for the lighting bar when it is open, so the photograph sits clear of it
  * rather than under it. Its own height (~116px) plus its bottom offset and a gutter.
  */
@@ -389,6 +400,10 @@ function Lightbox({
   contentRef,
 }) {
   const [zoom, setZoom] = useState(null); // {x, y} as percentages, or null for fit
+  /* Where a pointer went down, for the swipe measurement below. A ref, not state: nothing renders
+     from it, and re-rendering the zoomed photograph on every touchstart is the one thing this view
+     cannot afford. Must sit above the `!image` early return to stay a legal hook call. */
+  const down = useRef(null);
 
   // Any change of picture drops the zoom -- otherwise the next image opens scrolled to a corner
   // of the last one.
@@ -425,6 +440,42 @@ function Lightbox({
       x: ((e.clientX - box.left) / box.width) * 100,
       y: ((e.clientY - box.top) / box.height) * 100,
     });
+  };
+
+  /**
+   * Swipe to change picture, because arrows in the corners of a full-screen photograph are a
+   * desktop control: on a phone this view is the gallery, and the gesture everyone tries first is
+   * a drag (user, 2026-08-23). Radix's scroll lock rules out reusing the page's scroll-snap rail
+   * here, so the gesture is measured from raw pointer events -- which covers mouse-drag on desktop
+   * for free.
+   *
+   * ponytail: one axis, one threshold, no velocity and no rubber-banding follow-the-finger. The
+   * photograph jumps to the next one rather than sliding under the finger; add the transform if
+   * that reads as cheap on a real phone.
+   */
+  const onPointerDown = (e) => {
+    down.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const onPointerUp = (e) => {
+    const start = down.current;
+    down.current = null;
+    if (!start) return;
+
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+
+    // Horizontal, past the threshold, and more horizontal than vertical -- otherwise a scroll
+    // attempt or a slightly sloppy tap would count as a swipe. Never while zoomed: there the
+    // gesture belongs to the zoom, and a tap out is the way back.
+    if (!zoom && Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy)) {
+      onIndex(index + (dx < 0 ? 1 : -1));
+      return;
+    }
+
+    // Anything shorter is a tap, and taps zoom. Reusing the pointer event keeps the zoom origin
+    // exactly where the finger landed.
+    if (Math.abs(dx) < TAP_MAX && Math.abs(dy) < TAP_MAX) toggleZoom(e);
   };
 
   return (
@@ -467,7 +518,8 @@ function Lightbox({
             the size of the letterboxed photograph, so the wash lands only on pixels.
           */}
           <div
-            onClick={toggleZoom}
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUp}
             /*
               The box is exactly the letterboxed photograph, which is what the wash needs to avoid
               painting the scrim (see LightingWash). Getting there took three tries:
