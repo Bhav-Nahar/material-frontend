@@ -16,7 +16,7 @@ const nextConfig = {
   images: {
     loader: 'custom',
     loaderFile: './src/utils/shopifyLoader.js',
-    formats: ['image/avif', 'image/webp'],
+    // No `formats`: it only configures Vercel's optimiser, which the custom loader bypasses.
     remotePatterns: [{ protocol: 'https', hostname: 'cdn.shopify.com' }],
   },
 

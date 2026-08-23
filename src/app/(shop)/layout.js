@@ -35,8 +35,10 @@ export default async function ShopLayout({ children }) {
 
   return (
     <>
+      {/* Invisible until it's tabbed to -- gives keyboard users a way past the whole header. */}
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[600] focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:text-ink">Skip to content</a>
       <Header menuData={menuData} />
-      {children}
+      <div id="main">{children}</div>
       <Footer />
       <AutoAuthPopup />
       <WishlistNudge />

@@ -26,7 +26,11 @@ export default function Newsletter() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const email = new FormData(event.currentTarget).get("email");
+    // Captured BEFORE the await: React nulls event.currentTarget once dispatch ends, so touching
+    // it after the fetch threw -- and the catch below then showed "error" on every SUCCESSFUL
+    // subscribe.
+    const form = event.currentTarget;
+    const email = new FormData(form).get("email");
     setStatus("loading");
 
     try {
@@ -38,7 +42,7 @@ export default function Newsletter() {
       setStatus(res.ok ? "done" : "error");
       if (res.ok) {
         pushNewsletterSubscription(email);
-        event.currentTarget.reset();
+        form.reset();
       }
     } catch {
       setStatus("error");

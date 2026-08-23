@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Check, Clock, Copy, Loader2, Lock } from "lucide-react";
+import { Check, Clock, Copy, Heart, Loader2, Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,14 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
   // one is a security step on the way to an order, so it drops the discount card and the photograph
   // and says why the number is required.
   const checkout = authSource === "cart-checkout";
+  // Opened by the first wishlist save, not by anyone asking to log in. CaratLane's shape (user,
+  // 2026-08-22): ONE column, one field, one sentence about the list. The two-panel 720px box is
+  // right for someone who came to sign in and wrong as an answer to a heart tap -- it arrives as a
+  // page-sized interruption on top of an action that already succeeded, so it reads as a gate.
+  const wishlist = authSource === "wishlist";
+  // Both of these are asks made in the middle of something else, so both drop the decoration and
+  // the "create an account instead" detour and keep the single field.
+  const compact = checkout || wishlist;
 
   // details -> otp -> (details, if a login turned out to be new) -> scratch
   const [step, setStep] = useState(signup ? "details" : "phone");
@@ -94,6 +102,19 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
   const [cooldown, setCooldown] = useState(0);
 
   const otpRefs = useRef([]);
+
+  // The pendingSession, reachable from the unmount cleanup. If the dialog is dismissed at the
+  // scratch step (Escape, backdrop tap) the account ALREADY EXISTS server-side and the session
+  // cookie is set -- abandoning it here would show logged-out UI over a logged-in backend and cost
+  // the customer a second OTP SMS to get back in. The cleanup finishes the login instead.
+  const pendingRef = useRef(null);
+  const finishLoginRef = useRef(null);
+  useEffect(
+    () => () => {
+      if (pendingRef.current) finishLoginRef.current?.(pendingRef.current, true);
+    },
+    [],
+  );
 
   // Following a header link changes the intent behind an already-open dialog.
   useEffect(() => {
@@ -119,6 +140,9 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
      *   acquisition.
      */
     async (data, isNew = false) => {
+      // Before the dispatch: `login` can close the modal and unmount this form, and the unmount
+      // cleanup below must not run finishLogin a second time for a session already finished.
+      pendingRef.current = null;
       dispatch(login({ user: data.user, accessToken: data.accessToken }));
       // Before the merges: those await the network, and an event that fires only if the wishlist
       // API answers is an event that under-reports every time it does not.
@@ -126,8 +150,10 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
 
       // allSettled, not all: a wishlist that failed to merge must not stop the cart attaching, and
       // neither should keep the customer out of a session they already paid an SMS for.
+      // The token is passed explicitly (same as attachCartApi): redux-persist has not flushed the
+      // session to localStorage yet, so apiFetch's own lookup would send the merge unauthenticated.
       await Promise.allSettled([
-        mergeWishlistApi(getSessionId()),
+        mergeWishlistApi(getSessionId(), data.accessToken),
         attachCartApi({ cartId }, data.accessToken),
       ]);
       dispatch(fetchWishlist());
@@ -139,6 +165,10 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
     },
     [dispatch, cartId, redirectPath, authRedirectPath, router, onSuccess],
   );
+  // In an effect, not during render -- writing a ref mid-render is unreliable under the compiler.
+  useEffect(() => {
+    finishLoginRef.current = finishLogin;
+  }, [finishLogin]);
 
   const sendOtp = async () => {
     setError(null);
@@ -158,6 +188,10 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
       setTimeout(() => otpRefs.current[0]?.focus(), 50);
     } catch (err) {
       setError(err?.message || "Could not send the OTP. Please try again.");
+      // Server-side throttle: sync the visible cooldown to ITS clock, so "Resend code" is not an
+      // enabled button the server will keep refusing.
+      const retryAfter = Number(err?.data?.retryAfter);
+      if (retryAfter > 0) setCooldown(Math.ceil(retryAfter));
     } finally {
       setBusy(false);
     }
@@ -189,12 +223,13 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
       if (data.prize && !checkout) {
         setPrize(data.prize);
         setPendingSession(data);
+        pendingRef.current = data;
         setStep("scratch");
       } else {
         await finishLogin(data, true);
       }
     },
-    [finishLogin, authSource, checkout, signup],
+    [finishLogin, authSource, checkout],
   );
 
   const handleVerify = async (code) => {
@@ -211,7 +246,15 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
 
       setOtpProof(data.otpProof);
       if (form.firstName.trim() && EMAIL_RE.test(form.email)) {
-        await register(data.otpProof, form);
+        // Its own catch: the OTP is already verified and CONSUMED here, so a register failure
+        // ("that email is already registered") must land on the details screen where it can be
+        // fixed -- not wipe the OTP boxes and invite a retry of a code that will never work again.
+        try {
+          await register(data.otpProof, form);
+        } catch (err) {
+          setError(err?.message || "Could not create your account");
+          setStep("details");
+        }
       } else {
         // Came through Log in with a number we have never seen. We hold a valid OTP proof, so ask
         // only for the two things still missing rather than starting them over.
@@ -263,7 +306,9 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
 
     const landed = Math.min(index + digits.length, OTP_LENGTH - 1);
     otpRefs.current[landed]?.focus();
-    if (next.every(Boolean)) handleVerify(next.join(""));
+    // !busy: a keystroke landing while a verify is in flight must not start a second one -- two
+    // concurrent verifies on the REGISTER_REQUIRED path meant two register calls and two logins.
+    if (next.every(Boolean) && !busy) handleVerify(next.join(""));
   };
 
   const onOtpKeyDown = (index, e) => {
@@ -290,11 +335,15 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
         {scratched && prize && (
           <button
             type="button"
-            onClick={() => {
-              navigator.clipboard?.writeText(prize.code);
-              setCopied(true);
+            onClick={async () => {
+              // Only claim "copied" when it actually was -- clipboard is unavailable in insecure
+              // contexts and some webviews, and a false checkmark loses the customer their code.
+              try {
+                await navigator.clipboard.writeText(prize.code);
+                setCopied(true);
+              } catch {}
             }}
-            className="num flex items-center gap-2 border border-dashed border-line-2 bg-paper px-3 py-2 text-sm text-ink"
+            className="num flex items-center gap-2 border border-dashed border-line-strong bg-paper px-3 py-2 text-sm text-ink"
           >
             {prize.code}
             {copied ? (
@@ -320,8 +369,8 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
     // Two panels on desktop, stacked on a phone.
     // One column at checkout: nothing to sell to someone who has already chosen. Two panels
     // everywhere else, stacked on a phone.
-    <div className={checkout ? "" : "grid md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]"}>
-      {checkout ? null : signup ? (
+    <div className={compact ? "" : "grid md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]"}>
+      {compact ? null : signup ? (
         // On a PHONE this is a strip, not a panel. Stacked full-size it ran 320px tall and pushed
         // the mobile number field and the button below the fold -- before the keyboard opened, which
         // takes another 300px. The card still has to be visible (it is the offer), so it shrinks to a
@@ -378,20 +427,30 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
                   Win up to ₹750 off your first order
                 </h2>
               </header>
+            ) : wishlist ? (
+              // CENTRED, with the mark above the words. The dialog opened by itself, so the first
+              // thing it has to do is say what it is about -- a heart over one line does that before
+              // the sentence is read, which a left-aligned "Welcome back" does not. "Welcome back"
+              // is wrong here anyway: most people saving their first tile have never had an account.
+              <header className="flex flex-col items-center gap-3 text-center">
+                <span className="flex size-14 items-center justify-center rounded-full bg-paper text-action-ink">
+                  <Heart size={24} strokeWidth={1.6} className="fill-current" />
+                </span>
+                <div className="flex flex-col gap-1">
+                  <h2 className="font-display text-xl leading-tight text-ink">Saved. Now keep it.</h2>
+                  {/* The PROMISE, not the mechanism. "Verify your number" describes the chore; this
+                      describes what the chore buys, which is the only reason to do it. */}
+                  <p className="text-sm leading-snug text-subtle">
+                    Add your number and your list follows you — phone, laptop, and back again.
+                  </p>
+                </div>
+              </header>
             ) : (
               <header className="flex flex-col gap-1">
-                {/* The headline answers whatever brought them here. "Welcome back" is wrong for
-                    someone who just saved their first tile and has never had an account — and the
-                    reason they were given ("keep your list") has to survive into the dialog, or the
-                    nudge and the form look like two unrelated asks. */}
-                <h2 className="font-display text-xl text-ink">
-                  {authSource === "wishlist" ? "Keep your saved items" : "Welcome back"}
-                </h2>
+                <h2 className="font-display text-xl text-ink">Welcome back</h2>
                 <p className="flex items-center gap-2 text-sm text-subtle">
                   <Clock className="size-4 shrink-0 text-meta" />
-                  {authSource === "wishlist"
-                    ? "One SMS code and your list is saved to every device."
-                    : "One SMS code, no password."}
+                  One SMS code, no password.
                 </p>
               </header>
             )}
@@ -431,7 +490,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
               <div className="flex flex-col gap-2">
                 <Label htmlFor="auth-mobile">Mobile number</Label>
                 <div className="flex items-stretch">
-                  <span className="num flex items-center border border-r-0 border-line-2 bg-paper px-3 text-sm text-subtle">
+                  <span className="num flex items-center border border-r-0 border-line-strong bg-paper px-3 text-sm text-subtle">
                     +91
                   </span>
                   <Input
@@ -453,10 +512,11 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
               </div>
             )}
 
-            {/* Shown at checkout too, pre-ticked, so the opt-in that gets sent is one the customer
-                actually saw. Order and delivery SMS are transactional and go out regardless of this
-                flag; this box is what makes the promotional half of it a real consent record. */}
-            {(signup || (checkout && otpProof)) && (
+            {/* Shown WHEREVER name and email are collected -- signup, and the login path that
+                turned out to be a new number (otpProof). register sends this flag on all of those
+                paths, and an opt-in the customer never saw is not a consent record. Pre-ticked, so
+                the default is still subscribed. */}
+            {(signup || otpProof) && (
               <label className="flex items-start gap-2.5 text-sm text-subtle">
                 <Checkbox
                   checked={form.acceptsMarketing}
@@ -475,12 +535,12 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
               </label>
             )}
 
-            {error && <p className="text-sm text-bad">{error}</p>}
+            {error && <p role="alert" className="text-sm text-bad">{error}</p>}
 
             <Button onClick={submitDetails} disabled={busy} className="w-full">
               {busy ? (
                 <Loader2 className="size-4 animate-spin" />
-              ) : otpProof && !checkout ? (
+              ) : otpProof && !compact ? (
                 "Create account"
               ) : (
                 "Continue"
@@ -504,7 +564,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
             {/* No "create an account instead" from checkout: an unknown number is asked for a name
                 and email straight after the OTP anyway, so the switch only offers a longer road to
                 the same place -- with a discount wheel parked in the middle of a payment flow. */}
-            {!otpProof && !checkout && (
+            {!otpProof && !compact && (
               <p className="border-t border-line pt-4 text-center text-sm text-subtle">
                 {signup ? "Already have an account? " : "New to Material? "}
                 <button
@@ -553,15 +613,16 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
                   autoComplete={i === 0 ? "one-time-code" : "off"}
                   maxLength={OTP_LENGTH}
                   value={digit}
+                  disabled={busy}
                   onChange={(e) => setOtpAt(i, e.target.value)}
                   onKeyDown={(e) => onOtpKeyDown(i, e)}
                   aria-label={`Digit ${i + 1}`}
-                  className="num h-12 w-full border border-line-2 bg-surface text-center text-lg text-ink"
+                  className="num h-12 w-full border border-line-strong bg-surface text-center text-lg text-ink disabled:opacity-60"
                 />
               ))}
             </div>
 
-            {error && <p className="text-sm text-bad">{error}</p>}
+            {error && <p role="alert" className="text-sm text-bad">{error}</p>}
 
             <div className="flex items-center justify-between gap-3">
               <Button

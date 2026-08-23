@@ -16,8 +16,11 @@ import { predictiveSearch } from "@/lib/products";
  */
 export async function GET(request) {
   const query = request.nextUrl.searchParams.get("q") ?? "";
+  if (String(query).trim().length < 2) return Response.json({ results: [] });
   const found = await predictiveSearch(query);
-  if (!found) return Response.json({ results: [] });
+  // null here is "Shopify unreachable", not "no matches" -- a 502 lets the header say search is
+  // down instead of asserting "no matching products" for a term the store may well answer.
+  if (!found) return Response.json({ error: "Search is unavailable" }, { status: 502 });
 
   // One flat list, tagged -- SearchPopup splits it back out by isCollection / isContent, and it
   // ordered them collections-first before this route existed.
@@ -44,7 +47,8 @@ export async function GET(request) {
     ...found.articles.map((article) => ({
       id: `article-${article.handle}`,
       title: article.title,
-      url: `/blogs/${article.blog?.handle ?? "news"}/${article.handle}`,
+      // The app serves articles at /blog/<article> (one blog, see lib/blog.js) -- /blogs/... 404s.
+      url: `/blog/${article.handle}`,
       image: "",
       price: "",
       isCollection: false,

@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Wordmark from "./Wordmark";
+import PincodeControl from "./PincodeControl";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sheet as MobileSheet } from "react-modal-sheet";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,6 +24,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { apiFetch, fetchSearchResults } from "@/lib/api";
 import { transformMenuData } from "@/lib/menus";
 import { CATEGORY_IMAGES, SEARCH_CATEGORIES, POPULAR_SEARCHES } from "@/data/catalog";
+import { WHATSAPP_NUMBER } from "@/data/footer";
+import { buildWhatsappLink } from "@/lib/whatsapp";
 import { Icon } from "@/components/ui/icon";
 import { OPEN_MOBILE_MENU } from "@/lib/events";
 
@@ -168,6 +171,14 @@ export default function MobileHeader({ menuData }) {
   const displayItems = items || [];
 
   const displayQuantity = displayItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  // COUNTS, MOUNT-GATED IN ONE PLACE. The badge digits were already guarded but the aria-labels were
+  // not, so every page logged a hydration mismatch: the server rendered "Wishlist, 0 items" and the
+  // client, whose localStorage had four, rendered "Wishlist, 4 items". React does not patch
+  // attributes on a mismatch -- it warns and leaves the server's value -- so a screen reader was
+  // being told the wrong number by the one part of this control that only a screen reader reads.
+  // Derived here rather than guarded at each use, which is the mistake that produced the bug.
+  const wishlistCount = hasMounted ? wishlistItems.length : 0;
+  const cartCount = hasMounted ? displayQuantity : 0;
 
   const [activeMenuPath, setActiveMenuPath] = useState([]);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -201,16 +212,20 @@ export default function MobileHeader({ menuData }) {
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   useEffect(() => {
+    // `stale` kills the response race: type "mar" then "marble", and if "mar" resolves second it
+    // must not overwrite "marble"'s results.
+    let stale = false;
     const performSearch = async () => {
       if (debouncedSearchQuery.length > 1) {
         setIsSearching(true);
         try {
           const data = await fetchSearchResults(debouncedSearchQuery);
-          setSearchResults(data.results || []);
+          if (!stale) setSearchResults(data.results || []);
         } catch (err) {
           console.error("Search error:", err);
+          if (!stale) setSearchResults([]);
         } finally {
-          setIsSearching(false);
+          if (!stale) setIsSearching(false);
         }
       } else {
         setSearchResults([]);
@@ -218,6 +233,9 @@ export default function MobileHeader({ menuData }) {
     };
 
     performSearch();
+    return () => {
+      stale = true;
+    };
   }, [debouncedSearchQuery]);
 
   const suggestionData = useMemo(() => {
@@ -280,7 +298,8 @@ export default function MobileHeader({ menuData }) {
   };
 
   const handleKeyDown = (e) => {
-    if ((e.key === "Tab" || e.key === "ArrowRight") && suggestionSuffix) {
+    // ArrowRight only -- Tab must remain "leave the field", never "accept the ghost text".
+    if (e.key === "ArrowRight" && suggestionSuffix) {
       e.preventDefault();
       setSearchQuery(searchQuery + suggestionSuffix);
     } else if (e.key === "Enter" && searchQuery.trim().length > 0) {
@@ -339,6 +358,7 @@ export default function MobileHeader({ menuData }) {
             )}
             {searchQuery && (
               <button
+                aria-label="Clear search"
                 onClick={() => { setSearchQuery(""); setSearchResults([]); }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 z-30"
               >
@@ -371,10 +391,11 @@ export default function MobileHeader({ menuData }) {
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Collections</h3>
                       <div className="space-y-2">
                         {matchedCollections.slice(0, 6).map((col) => (
-                          <div
+                          <button
+                            type="button"
                             key={col.id}
                             onClick={() => handleResultClick(col.url)}
-                            className="group block p-3 bg-zinc-50 rounded-lg border border-zinc-100 active:bg-white transition-all duration-300"
+                            className="group block p-3 bg-zinc-50 rounded-lg border border-zinc-100 active:bg-white transition-all duration-300 w-full text-left"
                           >
                             <div className="flex-1 min-w-0">
                               <h4 className="text-sm font-bold text-gray-900">
@@ -384,7 +405,7 @@ export default function MobileHeader({ menuData }) {
                                 Collection
                               </p>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -396,10 +417,11 @@ export default function MobileHeader({ menuData }) {
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Products</h3>
                       <div className="grid grid-cols-1 gap-4">
                         {productsOnly.slice(0, 6).map((item) => (
-                          <div
+                          <button
+                            type="button"
                             key={item.id}
                             onClick={() => handleResultClick(item.url)}
-                            className="flex items-center gap-3 p-2 rounded-md active:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors"
+                            className="flex items-center gap-3 p-2 rounded-md active:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-full text-left"
                           >
                             <div className="w-16 h-16 relative rounded-md overflow-hidden shrink-0 bg-paper">
                               {item.image && (
@@ -418,7 +440,7 @@ export default function MobileHeader({ menuData }) {
                               <p className="text-xs text-gray-500 font-bold mt-1">{item.price}</p>
                             </div>
                             <ChevronRight size={16} className="text-gray-300" strokeWidth={1.5} />
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -430,10 +452,11 @@ export default function MobileHeader({ menuData }) {
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Blogs & Pages</h3>
                       <div className="space-y-2">
                         {contentResults.slice(0, 5).map((item) => (
-                          <div
+                          <button
+                            type="button"
                             key={item.id}
                             onClick={() => handleResultClick(item.url)}
-                            className="group block p-3 bg-zinc-50 rounded-lg border border-zinc-100 active:bg-white transition-all duration-300"
+                            className="group block p-3 bg-zinc-50 rounded-lg border border-zinc-100 active:bg-white transition-all duration-300 w-full text-left"
                           >
                             <h4 className="text-sm font-medium text-gray-900">
                               <HighlightMatch text={item.title} query={searchQuery} />
@@ -441,7 +464,7 @@ export default function MobileHeader({ menuData }) {
                             <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest mt-1">
                               {item.contentType}
                             </p>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -452,13 +475,13 @@ export default function MobileHeader({ menuData }) {
                       onClick={() => handleResultClick(`/search?q=${encodeURIComponent(searchQuery.trim())}`)}
                       className="w-full text-center text-primary font-bold text-sm py-3 uppercase tracking-widest hover:underline decoration-primary/30 underline-offset-4"
                     >
-                      View All Results for "{searchQuery}"
+                      View All Results for &ldquo;{searchQuery}&rdquo;
                     </button>
                   </div>
                 </>
               ) : searchQuery.length > 1 && (
                 <div className="text-center py-20">
-                  <p className="text-gray-500">No results found for "{searchQuery}"</p>
+                  <p className="text-gray-500">No results found for &ldquo;{searchQuery}&rdquo;</p>
                 </div>
               )}
             </div>
@@ -468,10 +491,11 @@ export default function MobileHeader({ menuData }) {
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Categories</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {SEARCH_CATEGORIES.map((cat, i) => (
-                    <div
+                    <button
+                      type="button"
                       key={i}
                       onClick={() => handleResultClick(cat.href)}
-                      className="group flex flex-col items-center"
+                      className="group flex flex-col items-center w-full text-left"
                     >
                       <div className="aspect-square w-full relative rounded-md overflow-hidden mb-2 bg-transparent border border-transparent hover:border-gray-100 transition-all">
                         <Image
@@ -484,7 +508,7 @@ export default function MobileHeader({ menuData }) {
                       <p className="text-[10px] font-bold text-gray-700 text-center uppercase tracking-tight leading-tight">
                         {cat.title}
                       </p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -496,10 +520,11 @@ export default function MobileHeader({ menuData }) {
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Popular searches</h3>
                 <div className="grid grid-cols-1 gap-4">
                   {POPULAR_SEARCHES.map((item) => (
-                    <div
+                    <button
+                      type="button"
                       key={item.term}
                       onClick={() => handleResultClick(item.href)}
-                      className="flex items-center gap-3 p-2 rounded-md active:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors"
+                      className="flex items-center gap-3 p-2 rounded-md active:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-full text-left"
                     >
                       <div className="w-16 h-16 relative rounded-md overflow-hidden shrink-0 bg-paper">
                         {item.image && (
@@ -510,7 +535,7 @@ export default function MobileHeader({ menuData }) {
                         <h4 className="text-sm font-medium text-gray-900 truncate">{item.term}</h4>
                       </div>
                       <ChevronRight size={16} className="text-gray-300" strokeWidth={1.5} />
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -523,15 +548,9 @@ export default function MobileHeader({ menuData }) {
 
   const handleLogout = async () => {
     try {
-      await apiFetch("/api/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({
-          email: user?.email,
-          mobile: user?.mobile,
-          firstName: user?.first_name,
-          lastName: user?.last_name
-        })
-      });
+      // No body: the backend reads nothing from it, and PII in a logout request is PII in access
+      // logs for no reason.
+      await apiFetch("/api/auth/logout", { method: "POST" });
     } catch (err) {
       console.error("Logout request failed:", err);
     } finally {
@@ -539,7 +558,7 @@ export default function MobileHeader({ menuData }) {
       dispatch(clearCart());
       dispatch(restoreGuestWishlist());
       const currentPath = window.location.pathname;
-      if (currentPath.startsWith("/account") || currentPath.startsWith("/dashboard")) {
+      if (currentPath.startsWith("/account")) {
         router.push("/login");
       } else {
         router.refresh();
@@ -729,7 +748,7 @@ export default function MobileHeader({ menuData }) {
     );
   };
 
-  const isAuthPage = pathname === "/login" || pathname === "/register";
+  const isAuthPage = pathname === "/login";
 
   const handleAuthTrigger = () => {
     if (isAuthPage) return;
@@ -865,7 +884,8 @@ export default function MobileHeader({ menuData }) {
             >
               Track Your Order
             </button>
-            <Link href="/pages/contact-us" prefetch={false} onClick={() => setIsMenuOpen(false)} className="block tracking-wider border-b border-gray-200 pb-3 font-medium text-sm leading-none align-middle capitalize text-black">
+            {/* /pages/contact, the handle the footer links and Shopify publishes — /pages/contact-us 404'd. */}
+            <Link href="/pages/contact" prefetch={false} onClick={() => setIsMenuOpen(false)} className="block tracking-wider border-b border-gray-200 pb-3 font-medium text-sm leading-none align-middle capitalize text-black">
               Contact Us
             </Link>
             <Link href="/pages/faqs" prefetch={false} onClick={() => setIsMenuOpen(false)} className="block text-[16px] tracking-wider font-medium text-sm leading-none align-middle capitalize text-black">
@@ -874,7 +894,9 @@ export default function MobileHeader({ menuData }) {
           </div>
 
           <div className="px-4 space-y-1">
-            <a href="https://api.whatsapp.com/send/?phone=%2B910000000000&text=I+want+to+know+more+about+Material" target="_blank" className="flex items-center justify-between p-4 border border-gray-100 rounded-lg group active:bg-gray-50 bg-paper">
+            {/* The REAL number from data/footer.js — this shipped pointing at +91 0000000000, so
+                every enquiry from the menu's most prominent contact card silently died. */}
+            <a href={buildWhatsappLink(WHATSAPP_NUMBER, ["I want to know more about Material"])} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 border border-gray-100 rounded-lg group active:bg-gray-50 bg-paper">
               <div className="flex items-center gap-4">
                 <div className="flex items-center justify-center">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -941,17 +963,21 @@ export default function MobileHeader({ menuData }) {
         <div className={cn("flex items-center shrink-0", isProductPage ? "gap-2.5" : "gap-4")}>
           <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
             <SheetTrigger asChild>
-              <button className="p-1">
+              <button aria-label="Open menu" className="p-1">
                 <Menu size={24} strokeWidth={1.5} />
               </button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-full p-0 border-none" showCloseButton={false}>
-              <div className="flex flex-col h-screen bg-white overflow-hidden">
+            {/* aria-describedby={undefined}: same as CategorySheet -- Radix warns when a
+                DialogContent has no description, and a nav sheet has nothing to describe.
+                h-dvh, not h-screen: 100vh includes the area behind iOS Safari's toolbar,
+                which clipped the menu's bottom row. */}
+            <SheetContent side="left" className="w-full p-0 border-none" showCloseButton={false} aria-describedby={undefined}>
+              <div className="flex flex-col h-dvh bg-white overflow-hidden">
                 <SheetHeader className="px-4 py-4 border-b border-gray-200 flex flex-row items-center justify-between sticky top-0 bg-white z-10 shrink-0">
                   <div className="flex items-center gap-2">
                     {activeMenuPath.length > 0 ? (
                       <>
-                        <button onClick={handleBack} className="p-1 mr-1">
+                        <button aria-label="Back" onClick={handleBack} className="p-1 mr-1">
                           <ChevronLeft size={20} strokeWidth={1.5} />
                         </button>
                         <SheetTitle className="text-sm capitalize tracking-widest font-semibold leading-none align-middle">
@@ -979,14 +1005,14 @@ export default function MobileHeader({ menuData }) {
                     )}
                     <Link href="/checkout/cart" prefetch={false} onClick={() => setIsMenuOpen(false)} className="relative p-1">
                       <Icon as={ShoppingBag} />
-                      {hasMounted && displayQuantity > 0 && (
+                      {cartCount > 0 && (
                         <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                          {displayQuantity}
+                          {cartCount}
                         </span>
                       )}
                     </Link>
                     <SheetClose asChild>
-                      <button className="p-1">
+                      <button aria-label="Close menu" className="p-1">
                         <X size={24} strokeWidth={1.5} />
                       </button>
                     </SheetClose>
@@ -1046,8 +1072,8 @@ export default function MobileHeader({ menuData }) {
           // cross-fading. Height is pinned at h-10 in both states so the header
           // never changes height and the PDP content below never jumps.
           <div className="grow min-w-0 flex">
-            <div
-              role="button"
+            <button
+              type="button"
               aria-label="Search"
               aria-expanded={isSearchExpanded}
               onClick={() => {
@@ -1072,7 +1098,7 @@ export default function MobileHeader({ menuData }) {
               >
                 Search here
               </span>
-            </div>
+            </button>
           </div>
         )}
 
@@ -1080,34 +1106,52 @@ export default function MobileHeader({ menuData }) {
           {!isProductPage && (
             <>
 
-              {signedIn ? (
-                <Link href="/account" prefetch={false} className="p-1">
-                  <Avatar className="h-7 w-7 cursor-pointer border border-gray-100">
-                    {user.avatar && <AvatarImage src={user.avatar} alt={user.name} />}
-                    <AvatarFallback className="bg-ink text-white font-bold text-[10px]">{getInitials(user?.name)}</AvatarFallback>
-                  </Avatar>
-                </Link>
-              ) : (
-                <button onClick={handleAuthTrigger} className="p-1">
-                  <Icon as={UserIcon} />
-                </button>
-              )}
+              {/* COMPACT: the pin glyph alone until a pincode is set, then the six digits beside it.
+                  Not on the PDP -- that page has PincodeCheck in its own buy box, and two controls
+                  for one value on one screen is how they end up disagreeing.
+
+                  CaratLane ships NOTHING here: their mobile header has no pincode at all, and they
+                  push the job onto a per-card "Check Delivery Date" link plus an auto-popup. That
+                  works when every card carries a delivery promise; ours do not, so the header is the
+                  only place a phone customer can answer this without opening a product. */}
+              <PincodeControl compact className="p-1 text-subtle" />
+
+              {/* NO ACCOUNT SLOT HERE AT ALL (user, 2026-08-23). Both faces of it -- the signed-out
+                  person icon and the signed-in avatar -- lived here and both were a second route to
+                  something the menu already carries: the menu's footer has "Log In" and "Sign Up" in
+                  words, and its own header carries the avatar. On a 360px bar, four icons compete
+                  with the wordmark; three do not. Account is a place you go deliberately, not
+                  something you need one tap from on every page -- unlike the cart, which is where the
+                  money is, and the wishlist, which is the thing the heart on every card feeds. */}
             </>
           )}
 
-          <Link href={signedIn ? "/account/wishlist" : "#"} prefetch={false} onClick={!signedIn ? handleAuthTrigger : undefined} className="relative p-1">
-            <Icon as={Heart} />
-            {hasMounted && wishlistItems.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                {wishlistItems.length}
-              </span>
-            )}
-          </Link>
-          <Link href="/checkout/cart" prefetch={false} className="relative p-1">
+          {/* A real Link only when there is somewhere to go. Signed out, href="#" scroll-jumped
+              to the top and left a stray hash -- a button opens the login dialog and nothing else. */}
+          {signedIn ? (
+            <Link href="/account/wishlist" prefetch={false} aria-label={`Wishlist, ${wishlistCount} items`} className="relative p-1">
+              <Icon as={Heart} />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                  {wishlistCount}
+                </span>
+              )}
+            </Link>
+          ) : (
+            <button type="button" onClick={handleAuthTrigger} aria-label={`Wishlist, ${wishlistCount} items`} className="relative p-1">
+              <Icon as={Heart} />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                  {wishlistCount}
+                </span>
+              )}
+            </button>
+          )}
+          <Link href="/checkout/cart" prefetch={false} aria-label={`Cart, ${cartCount} items`} className="relative p-1">
             <Icon as={ShoppingBag} />
-            {hasMounted && displayQuantity > 0 && (
+            {cartCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                {displayQuantity}
+                {cartCount}
               </span>
             )}
           </Link>
@@ -1116,7 +1160,9 @@ export default function MobileHeader({ menuData }) {
 
       {!isProductPage && (
         <div className="px-4 py-2 bg-white">
-          <div
+          <button
+            type="button"
+            aria-label="Search"
             onClick={() => {
               setShowSearch(true);
             }}
@@ -1140,7 +1186,7 @@ export default function MobileHeader({ menuData }) {
                 </motion.span>
               </AnimatePresence>
             </div>
-          </div>
+          </button>
         </div>
       )}
 

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getProduct, getRelated } from "@/lib/product";
+import { getReviews } from "@/lib/reviews";
 import ProductRail from "@/components/product/ProductRail";
+import ProductReviews from "@/components/product/ProductReviews";
 import RecentlyViewed from "@/components/product/RecentlyViewed";
 import HomeFaqs from "@/components/home/HomeFaqs";
 import ShopByCategory from "@/components/home/ShopByCategory";
@@ -52,7 +54,13 @@ export default async function Page({ params }) {
   const product = await getProduct(handle);
   if (!product) notFound();
 
-  const related = await getRelated(product.collection?.handle, product.handle);
+  // Both under the fold, neither needed to render the buy box -- so they go out together rather
+  // than the rail waiting on judge.me. getReviews never throws (see lib/reviews.js), so a
+  // Promise.all here cannot take the page down with it.
+  const [related, reviews] = await Promise.all([
+    getRelated(product.collection?.handle, product.handle),
+    getReviews(product.id),
+  ]);
 
   return (
     <>
@@ -61,7 +69,7 @@ export default async function Page({ params }) {
           is read off a field the PDP no longer uses. */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema(product)) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema(product, reviews)) }}
       />
       <script
         type="application/ld+json"
@@ -103,13 +111,23 @@ export default async function Page({ params }) {
         </nav>
       </div>
 
-      <ProductPage product={product} />
+      <ProductPage product={product} reviews={reviews} />
 
       {/* FLUSH against the detail panels above it -- no margin. The panels end without a bottom rule
           (see last:border-b-0 in ProductDetails) and this strip carries its own border-t, so the two
           meet on ONE hairline and the strip reads as the list's closing edge. It follows the panels in
           normal flow, so opening one simply pushes the strip down; nothing here is pinned or measured. */}
       <WhyMaterial />
+
+      {/* BEFORE the rails, after the promises strip. Reviews are the last thing read while the buy
+          decision is still open -- once a shopper is into "more from this range" they have stopped
+          evaluating THIS tile and started browsing, so a reviews block below the rails is only
+          found by the people who no longer need it.
+
+          It goes UNDER the strip rather than above it because the strip's border-y is what closes
+          the detail panels above it (see the note on last:border-b-0 in ProductDetails); anything
+          inserted between the two leaves that list ending on nothing. */}
+      <ProductReviews summary={reviews} product={product} />
 
       {related.length > 0 && (
         <section className="container-main mt-6 lg:mt-8">
@@ -165,7 +183,7 @@ export default async function Page({ params }) {
 
 /* ---------------------------------------------------------------------- schema */
 
-function productSchema(product) {
+function productSchema(product, reviews) {
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
   return {
     "@context": "https://schema.org",
@@ -176,6 +194,19 @@ function productSchema(product) {
     sku: product.variants[0]?.sku ?? undefined,
     brand: product.vendor ? { "@type": "Brand", name: product.vendor } : undefined,
     category: product.category ?? undefined,
+    // The stars in Google's result, from the SAME summary the page prints -- not a second count
+    // maintained here. Omitted entirely when there are none: an aggregateRating with a zero count
+    // is a structured-data error, and Google treats an invented one as spam.
+    aggregateRating:
+      reviews?.count > 0
+        ? {
+            "@type": "AggregateRating",
+            ratingValue: reviews.average,
+            reviewCount: reviews.count,
+            bestRating: 5,
+            worstRating: 1,
+          }
+        : undefined,
     // One offer per variant, priced by the PACK -- that is what Shopify charges. Publishing the
     // per-sq-ft rate here would put a price in Google that no checkout will ever match.
     offers: product.variants.map((v) => ({

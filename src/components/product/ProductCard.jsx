@@ -3,7 +3,7 @@
 import { useId } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Heart, Star } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination } from "swiper/modules";
 import { useDispatch, useSelector } from "react-redux";
@@ -47,7 +47,8 @@ import "swiper/css/pagination";
 const CONTROL = "z-10 rounded-sm bg-surface/60 text-ink backdrop-blur-md";
 
 /** LABELS overlaid on the product photo. */
-const LABEL = "z-10 rounded-sm bg-ink px-2 py-1 text-[11px] leading-none text-white";
+const LABEL =
+  "z-10 rounded-sm bg-ink px-2 py-1 text-[11px] leading-none text-white sm:px-2.5 sm:py-1.5 sm:text-xs";
 
 /**
  * `list` and `index` are analytics only and both optional -- a card renders identically without
@@ -60,15 +61,23 @@ export default function ProductCard({ product, priority = false, list = "", inde
   const prevClass = `img-prev-${id}`;
   const nextClass = `img-next-${id}`;
   const dispatch = useDispatch();
+  // BOTH ARRAYS. `guestItems` is the localStorage list; `items` is the signed-in customer's server
+  // list, and mergeGuestWishlist EMPTIES guestItems once it has pushed them up. Reading only
+  // guestItems meant a signed-in customer's saved tiles lost their filled heart and their scrim on
+  // the next page load -- the card claimed the product was unsaved while the wishlist page listed it.
   const guestItems = useSelector((state) => state.wishlist.guestItems);
+  const items = useSelector((state) => state.wishlist.items);
   // The wishlist is persisted in localStorage, so it does not exist server-side. Reading it during
   // the first render made the markup disagree with the server and React rebuilt the entire tree,
   // which left this card's gallery -- and the hero -- as blank Swipers.
   const hasMounted = useHasMounted();
-  const isWishlisted = hasMounted && guestItems.some((i) => i.productHandle === product.handle);
+  const isWishlisted =
+    hasMounted &&
+    [...guestItems, ...items].some((i) => i.productHandle === product.handle);
 
   const images = product.images ?? [];
-  const tag = product.tags?.[0];
+  // The card does not carry a made-to-order note at all -- the PDP is where lead time belongs.
+  const tag = product.tags?.find((t) => t !== "Made to order");
   const discount =
     product.comparePrice > product.price
       ? Math.round(((product.comparePrice - product.price) / product.comparePrice) * 100)
@@ -89,6 +98,10 @@ export default function ProductCard({ product, priority = false, list = "", inde
           image: images[0],
           price: product.price,
           comparePrice: product.comparePrice ?? "",
+          // The card's price is per sq ft when a unit exists; the PDP saves the pack price. The
+          // wishlist row prints the unit so ₹82/sq ft and ₹1,845/box cannot read as the same kind
+          // of number.
+          unit: product.unit ?? null,
         }),
       );
       pushAddToWishlist(gtmItem(product, index));
@@ -141,6 +154,12 @@ export default function ProductCard({ product, priority = false, list = "", inde
             <Swiper
               modules={[Navigation, Pagination]}
               nested
+              // ponytail: `loop` and nothing else. The arrows never dead-end on a card, which is
+              // what made the last image feel like a broken control rather than the end of a set.
+              // EXCEPT inside a rail: `nested` hands the gesture to the parent Swiper only at an
+              // edge, and a looping gallery has no edge -- so a multi-image card swallowed every
+              // horizontal swipe and the rail felt stuck. Rails get edges back; grids keep the loop.
+              loop={!list.startsWith("rail:")}
               slidesPerView={1}
               navigation={{ prevEl: `.${prevClass}`, nextEl: `.${nextClass}` }}
               pagination={{ type: "progressbar" }}
@@ -163,14 +182,14 @@ export default function ProductCard({ product, priority = false, list = "", inde
             <button
               type="button"
               aria-label="Previous image"
-              className={`${prevClass} ${CONTROL} absolute left-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity group-hover/card:opacity-100 lg:flex`}
+              className={`${prevClass} ${CONTROL} absolute left-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity focus-visible:opacity-100 group-hover/card:opacity-100 lg:flex`}
             >
               <ChevronLeft size={16} strokeWidth={1.5} />
             </button>
             <button
               type="button"
               aria-label="Next image"
-              className={`${nextClass} ${CONTROL} absolute right-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity group-hover/card:opacity-100 lg:flex`}
+              className={`${nextClass} ${CONTROL} absolute right-2 top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity focus-visible:opacity-100 group-hover/card:opacity-100 lg:flex`}
             >
               <ChevronRight size={16} strokeWidth={1.5} />
             </button>
@@ -197,10 +216,24 @@ export default function ProductCard({ product, priority = false, list = "", inde
           </span>
         )}
 
-        {!product.inStock && (
-          <span className={`${LABEL} pointer-events-none absolute bottom-2 left-2`}>
-            Made to order
-          </span>
+        {/* SAVED STATE on the photo, CaratLane's PLP treatment: once a product is in the list the
+            image dims under a scrim and says so, permanently -- not a flash that fades. In a
+            twelve-card grid the heart alone is a 16px difference between "saved" and "not", which
+            is invisible while scanning; the dimmed tile is legible at arm's length and is what
+            stops the same product being saved twice.
+
+            THE HEART STAYS ON TOP, unlike theirs. CaratLane's scrim covers the heart, so the only
+            way to unsave is the wishlist page -- a one-way door on a control that reads as a
+            toggle. `pointer-events-none` here plus the button's z-10 keeps the second tap working.
+
+            Not a hover reveal (user, 2026-08-22): saved-ness is state, and state that only appears
+            under the cursor does not exist on a phone. */}
+        {isWishlisted && (
+          <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-ink/45">
+            <span className="text-xs font-medium uppercase tracking-wide text-white">
+              In your wishlist
+            </span>
+          </div>
         )}
 
         <button
@@ -218,15 +251,53 @@ export default function ProductCard({ product, priority = false, list = "", inde
         </button>
       </div>
 
-      {/* Category and code, then title, then a ruled price row -- Material Depot's arrangement.
-          Theirs reads: SUBWAY & BACKSPLASH / TL 05295 E, the title, then ₹89/Sq. Ft. on the left
-          against ₹862/Box and 44% OFF ₹1522 on the right. */}
-      {(product.category || product.sku) && (
-        <div className="mt-3 flex items-baseline justify-between gap-2 text-[11px] text-subtle">
-          {product.category && <span className="truncate uppercase tracking-wide">{product.category}</span>}
-          {/* The product code is a desktop detail. In a 160px card on a phone it sat 9px from the
-              category and read as a collision, so it is dropped below lg rather than squeezed. */}
-          {product.sku && <span className="num hidden shrink-0 lg:inline">{product.sku}</span>}
+      {/* Category, then title, then a ruled price row -- Material Depot's arrangement, minus the
+          product code: it means nothing to a customer browsing a grid. */}
+      {/* CATEGORY on the left, RATING on the right, sharing ONE row.
+          The rating rides this line rather than taking a line of its own between the title and the
+          price, which is where it started. In a grid only some products have reviews, so an extra
+          row appeared on some cards and not others and left the price lines of a four-across shelf
+          staggered by 23px -- untidy in a way that reads as a bug, and today it would be one card
+          in twelve. This row already exists on every card and was half empty, so the rating costs
+          no height at all and the prices stay on one line across the whole grid.
+
+          Rendered only when the product HAS a rating -- `rating` is null for every product with no
+          published review (see attachRatings). No empty star row and no "(0)": a greyed-out row of
+          five stars is the manufactured social proof this grid refuses everywhere else, and on a
+          card it would appear on every tile at once, which is how a whole shelf comes to look
+          reviewed when none of it is.
+
+          ONE STAR AND THE NUMBER, not a row of five (user, 2026-08-22). A five-star row is ~60px
+          wide, which on a 160px card is a third of this line spent drawing what "4.5" says in
+          twelve pixels -- and at 11px the half-star clip is too small to read anyway, so the
+          picture was less precise than the figure it replaced. One gold star marks WHAT the number
+          is; the number carries the score. The full row still runs on the PDP, where there is room
+          for it and where the breakdown sits beside it.
+
+          The COUNT stays, in meta grey. It is the one thing neither the star nor the average can
+          say, and 4.5-from-two-reviews and 4.5-from-two-hundred are not the same claim. */}
+      {(product.category || product.rating?.count > 0) && (
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="truncate text-[11px] uppercase tracking-wide text-subtle">
+            {product.category}
+          </span>
+          {product.rating?.count > 0 && (
+            <span className="flex shrink-0 items-center gap-1">
+              {/* Number first, then the star -- the same order as the PDP's rating pill, which
+                  follows the Indian convention (Flipkart, Zomato, CaratLane). The digit is the
+                  information; the star only says what kind of number it is. */}
+              <span className="num text-[11px] font-medium text-ink">
+                {product.rating.average.toFixed(1)}
+              </span>
+              <Star
+                size={12}
+                strokeWidth={1.5}
+                aria-hidden="true"
+                className="fill-gold text-gold-line"
+              />
+              <span className="num text-[10px] text-meta">({product.rating.count})</span>
+            </span>
+          )}
         </div>
       )}
 
@@ -258,7 +329,11 @@ export default function ProductCard({ product, priority = false, list = "", inde
           )}
         </p>
 
-        {/* What they actually pay: pack price, then the saving against MRP. */}
+        {/* What they actually pay: pack price, then the saving against MRP -- Material Depot's right
+            column, ₹862/Box over 44% OFF ₹1522. BOTH figures are per pack. The struck price used to
+            be `comparePrice`, which products.js has already divided by coverage, so a struck ₹155/sq
+            ft sat under ₹1,380/box and read as a price RISE across two units (user, 2026-08-21).
+            `packCompare` is Shopify's compare-at undivided, which is the number this column wants. */}
         {(product.packPrice > 0 || discount > 0) && (
           <div className="shrink-0 text-right">
             {product.packPrice > 0 && (
@@ -269,7 +344,9 @@ export default function ProductCard({ product, priority = false, list = "", inde
             {discount > 0 && (
               <p className="num text-[9px] leading-tight lg:text-[11px]">
                 <span className="font-semibold text-good">{discount}% OFF</span>{" "}
-                <span className="text-meta line-through">₹{formatPrice(product.comparePrice)}</span>
+                <span className="text-meta line-through">
+                  ₹{formatPrice(product.packCompare > 0 ? product.packCompare : product.comparePrice)}
+                </span>
               </p>
             )}
           </div>

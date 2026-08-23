@@ -15,7 +15,8 @@ export default function TopBar() {
 
   return (
     <div className="bg-[var(--charcoal)] text-white group relative h-10 overflow-hidden">
-      <button className="topbar-prev absolute left-2 z-20 transition-opacity cursor-pointer top-1/2 -translate-y-1/2 flex items-center justify-center">
+      {/* p-2 -m-1 pads the tap target past the 16px glyph without shifting the layout. */}
+      <button aria-label="Previous announcement" className="topbar-prev absolute left-2 z-20 p-2 -m-1 transition-opacity cursor-pointer top-1/2 -translate-y-1/2 flex items-center justify-center">
         <ChevronLeft size={16} strokeWidth={1.5} />
       </button>
 
@@ -25,6 +26,7 @@ export default function TopBar() {
         autoplay={{
           delay: 10000,
           disableOnInteraction: false,
+          pauseOnMouseEnter: true,
         }}
         navigation={{
           prevEl: ".topbar-prev",
@@ -55,7 +57,7 @@ export default function TopBar() {
         ))}
       </Swiper>
 
-      <button className="topbar-next absolute right-2 z-20 transition-opacity cursor-pointer top-1/2 -translate-y-1/2 flex items-center justify-center">
+      <button aria-label="Next announcement" className="topbar-next absolute right-2 z-20 p-2 -m-1 transition-opacity cursor-pointer top-1/2 -translate-y-1/2 flex items-center justify-center">
         <ChevronRight size={16} strokeWidth={1.5} />
       </button>
     </div>

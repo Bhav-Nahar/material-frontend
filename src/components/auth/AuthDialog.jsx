@@ -17,8 +17,12 @@ import AuthForm from "./AuthForm";
 export default function AuthDialog({ open, onOpenChange, redirectPath, mode = "login", source }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const close = () => onOpenChange(false);
-  // Checkout drops the side panel, so it drops the width that panel was paying for.
-  const width = source === "cart-checkout" ? "!max-w-[420px]" : "!max-w-[720px]";
+
+  // Checkout and the wishlist prompt drop the side panel, so they drop the width that panel was
+  // paying for. The wishlist one is narrower still: it is one field answering one sentence, and at
+  // 380px that sentence sets on a single line and the box stops looking like a form.
+  const width =
+    source === "cart-checkout" ? "!max-w-[420px]" : source === "wishlist" ? "!max-w-[380px]" : "!max-w-[720px]";
 
   if (isMobile) {
     return (

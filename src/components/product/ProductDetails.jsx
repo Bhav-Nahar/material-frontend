@@ -29,9 +29,23 @@ export default function ProductDetails({ product, variant }) {
     // this rather than a ruled row, and a card needs air under it or its border and the first panel's
     // top rule stack into a double line.
     <div className="container-main mt-6">
-      {product.description && (
+      {/* descriptionHtml, NOT description. Shopify's plain-text `description` strips the markup and
+          returns the whole thing on ONE line -- no newlines at all -- so `whitespace-pre-line` had
+          nothing to break and the merchant's nine paragraphs, including the "Key Features" and
+          "Ideal Use Cases" headings and the dashed bullets under them, collapsed into a single wall
+          of prose (user, 2026-08-22).
+
+          The markup is merchant-authored, from Shopify admin -- the same trust boundary the prices
+          come across -- so it is injected rather than sanitised, and no sanitiser dependency is
+          added for it. It arrives carrying `class="tw-mb-3"` from the source catalogue's own
+          Tailwind build, which matches nothing here, so the spacing is applied from this side with
+          child selectors instead of trusting the incoming classes. */}
+      {product.descriptionHtml && (
         <Panel title="About this product" icon={Info} open>
-          <p className="whitespace-pre-line">{product.description}</p>
+          <div
+            className="[&_p]:mt-2.5 [&_p:first-child]:mt-0 [&_a]:underline [&_li]:mt-1.5 [&_ul]:mt-2.5 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-semibold"
+            dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
+          />
         </Panel>
       )}
 

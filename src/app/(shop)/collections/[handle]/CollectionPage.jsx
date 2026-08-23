@@ -441,7 +441,7 @@ export default function CollectionPage({
           ) : (
             <div
               ref={grid}
-              className={`grid grid-cols-2 gap-x-4 gap-y-8 transition-opacity lg:grid-cols-3 lg:gap-x-6 xl:grid-cols-4 ${
+              className={`grid grid-cols-2 gap-x-4 gap-y-8 transition-opacity lg:grid-cols-3 lg:gap-x-6 ${
                 pending ? "opacity-50" : ""
               }`}
             >
@@ -634,9 +634,11 @@ function BarButton({ icon: Icon, label, badge = 0, onClick }) {
 function Checkbox({ checked, onChange, label, count }) {
   return (
     <label className="flex cursor-pointer items-center gap-2.5 text-sm">
-      <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
+      {/* peer/peer-focus-visible: the real input is sr-only, so without this the painted box
+          shows nothing when the checkbox is focused from the keyboard. */}
+      <input type="checkbox" checked={checked} onChange={onChange} className="peer sr-only" />
       <span
-        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border peer-focus-visible:ring-2 peer-focus-visible:ring-action ${
           checked ? "border-action bg-action" : "border-line-strong bg-surface"
         }`}
       >

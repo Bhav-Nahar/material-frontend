@@ -1,6 +1,7 @@
 // Relative rather than "@/" so the coverage maths below can be exercised under plain
 // `node --test` without a bundler -- see product.test.mjs.
 import { storefront, mapProducts, PRODUCT_FIELDS } from "./products.js";
+import { attachRatings } from "./reviews.js";
 
 /**
  * ONE product, everything the PDP renders, in ONE request.
@@ -76,7 +77,13 @@ const RELATED_QUERY = `
 `;
 
 export async function getProduct(handle) {
-  const data = await storefront("getProduct", PRODUCT_QUERY, { handle });
+  // 15 minutes, not the 24 hours the shelves use: this page shows stock ("Only N left") and price,
+  // and a day-stale answer on either is an oversold order or a mispriced one.
+  // throwOnError: "Shopify said null" is a real 404; "Shopify was down" must render error.js as a
+  // 5xx, not tell Googlebot a live product no longer exists.
+  const data = await storefront("getProduct", PRODUCT_QUERY, { handle }, 900, {
+    throwOnError: true,
+  });
   return data?.product ? mapProduct(data.product) : null;
 }
 
@@ -91,7 +98,9 @@ export async function getProduct(handle) {
 export async function getRelated(collectionHandle, exclude, first = 12) {
   if (!collectionHandle) return [];
   const data = await storefront("getRelated", RELATED_QUERY, { handle: collectionHandle, first });
-  return mapProducts(data?.collection?.products?.nodes).filter((p) => p.handle !== exclude);
+  return attachRatings(
+    mapProducts(data?.collection?.products?.nodes).filter((p) => p.handle !== exclude),
+  );
 }
 
 /* ------------------------------------------------------------------ coverage maths */

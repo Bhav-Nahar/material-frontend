@@ -98,7 +98,7 @@ export default function ScratchCard({ prize = null, onRevealed, className = "" }
 
   return (
     <div
-      className={`relative mx-auto aspect-[16/10] w-full max-w-[280px] overflow-hidden border border-line-2 bg-surface select-none ${className}`}
+      className={`relative mx-auto aspect-[16/10] w-full max-w-[280px] overflow-hidden border border-line-strong bg-surface select-none ${className}`}
     >
       {/* What is underneath. Rendered always, so the reveal is an uncovering rather than a swap. */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center">

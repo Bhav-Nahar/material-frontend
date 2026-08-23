@@ -104,6 +104,11 @@ export default function WishlistPage() {
               {item.price != null && item.price !== "" && (
                 <p className="num mt-1.5 text-sm font-semibold text-ink">
                   ₹{formatPrice(Number(item.price))}
+                  {/* The unit the price was saved in — a card saves ₹82/sq ft, the PDP saves
+                      ₹1,845/box, and without the suffix the two read as the same kind of number. */}
+                  {item.unit ? (
+                    <span className="text-xs font-normal text-subtle">/{item.unit}</span>
+                  ) : null}
                   {item.comparePrice ? (
                     <span className="num ml-1.5 text-xs font-normal text-meta line-through">
                       ₹{formatPrice(Number(item.comparePrice))}

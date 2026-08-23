@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowRight, Lock, ShoppingCart, Wallet } from "lucide-react";
+import { ArrowRight, Lock, ShoppingCart, Star, Wallet } from "lucide-react";
 
 import ProductGallery from "@/components/product/ProductGallery";
 import BuySheet from "@/components/product/BuySheet";
@@ -53,7 +53,7 @@ import { formatPrice } from "@/utils/formatPrice";
  * diamonds, ring sizers, metal/karat pickers, store stock and the coin balance are all jewelry, and
  * gone.
  */
-export default function ProductPage({ product }) {
+export default function ProductPage({ product, reviews }) {
   const dispatch = useDispatch();
   const router = useRouter();
   const hasMounted = useHasMounted();
@@ -263,6 +263,8 @@ export default function ProductPage({ product }) {
           image: product.media[0]?.url,
           price: variant.price,
           comparePrice: variant.comparePrice ?? "",
+          // Pack price, so the row says which pack. The card path saves per-sq-ft with its unit.
+          unit: variant.packUnit || "box",
         }),
       );
       pushAddToWishlist(gtmProductItem(product, variant));
@@ -355,6 +357,59 @@ export default function ProductPage({ product }) {
             {product.title}
           </h1>
 
+          {/* THE RATING, IN THE FIRST FOLD -- and only when there is one. No empty five-star row,
+              no "(0)": this page refuses invented social proof everywhere else, and a greyed-out
+              row of stars beside a real price is the same lie drawn instead of written.
+
+              It reads as a LINK, not a caption. Two jumps, because they are two different questions
+              and a shopper arrives with one or the other: the score jumps to the reviews, and "Write
+              a review" jumps to the same place for someone who came back to say something. Both are
+              anchors to #reviews rather than buttons -- the section is already on the page, five
+              screens down, and an anchor works with JavaScript off and can be opened in a new tab.
+
+              The average is spelled out here (4.3, not just stars) because this is where the buying
+              decision is made and the difference between 4.1 and 4.8 is the whole point. The card
+              in the grid deliberately shows only stars and a count -- see the note in ProductCard. */}
+          {reviews?.count > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {/* A PILL, CaratLane's shape (audited 2026-08-22) -- theirs reads "4.9★ | 1094
+                  Ratings" in a bordered capsule above the price, and it is the right call over the
+                  loose inline row this used to be. A bordered object is one thing the eye lands on;
+                  a row of stars, a number and a count set loose beside a 24px title is three, and
+                  it read as caption text rather than something to click.
+
+                  NUMBER FIRST, then the star. That is the Indian convention -- Flipkart, Zomato,
+                  Swiggy and CaratLane all put the figure ahead of the mark -- and it is also what
+                  survives at a glance: the digit is the information, the star only says what kind
+                  of number it is. ProductCard does the same, so the two never disagree. */}
+              <a
+                href="#reviews"
+                className="inline-flex items-center gap-1.5 rounded-sm border border-line bg-surface px-2.5 py-1 transition-colors hover:border-line-strong"
+              >
+                <span className="num text-sm font-semibold leading-none text-ink">
+                  {reviews.average.toFixed(1)}
+                </span>
+                <Star
+                  size={13}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                  className="fill-gold text-gold-line"
+                />
+                <span className="h-3 w-px bg-line" aria-hidden="true" />
+                <span className="num text-xs leading-none text-subtle">
+                  {reviews.count} review{reviews.count === 1 ? "" : "s"}
+                </span>
+              </a>
+
+              <a
+                href="#reviews"
+                className="text-xs text-action-ink underline-offset-4 hover:underline"
+              >
+                Write a review
+              </a>
+            </div>
+          )}
+
           {/* PRICE. Per sq ft leads and pack price sits opposite it -- Material Depot's split, and
               the right one: the left figure is what you compare tiles on, the right is what you
               pay. Both come off the SAME variant, so the row can never mix two. */}
@@ -366,6 +421,12 @@ export default function ProductPage({ product }) {
               </span>
             </p>
 
+            {/* The pack price and the saving against MRP, BOTH per pack -- Material Depot's right
+                column. The struck figure used to be `perSqFtCompare`, compare-at divided by coverage,
+                which put a struck ₹155/sq ft directly under ₹1,380/box and read as "was ₹155, now
+                ₹1,380" -- a price RISE across two different units (user, 2026-08-21). Shopify only
+                ever holds compare-at per pack, so that is the number shown here, against the pack
+                price it belongs to. The PERCENTAGE is unaffected: it is computed off the pack pair. */}
             <div className="text-right">
               {perSqFt && (
                 <p className="num text-sm text-ink">
@@ -379,7 +440,7 @@ export default function ProductPage({ product }) {
               {discount > 0 && (
                 <p className="num text-xs">
                   <span className="text-meta line-through">
-                    ₹{formatPrice(perSqFt ? variant.perSqFtCompare : variant.comparePrice)}
+                    ₹{formatPrice(variant.comparePrice)}
                   </span>{" "}
                   <span className="font-semibold text-good">{discount}% OFF</span>
                 </p>

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Heart, LogOut, Search, ShoppingBag, Store, User } from "lucide-react";
+import PincodeControl from "./PincodeControl";
 import { Icon } from "@/components/ui/icon";
 import Image from "next/image";
 import Wordmark from "./Wordmark";
@@ -48,7 +49,6 @@ export default function MainHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout: authLogout, openLogin } = useAuth();
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,6 +77,14 @@ export default function MainHeader() {
   const displayItems = items || [];
 
   const displayQuantity = displayItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  // COUNTS, MOUNT-GATED IN ONE PLACE. The badge digits were already guarded but the aria-labels were
+  // not, so every page logged a hydration mismatch: the server rendered "Wishlist, 0 items" and the
+  // client, whose localStorage had four, rendered "Wishlist, 4 items". React does not patch
+  // attributes on a mismatch -- it warns and leaves the server's value -- so a screen reader was
+  // being told the wrong number by the one part of this control that only a screen reader reads.
+  // Derived here rather than guarded at each use, which is the mistake that produced the bug.
+  const wishlistCount = hasMounted ? wishlistItems.length : 0;
+  const cartCount = hasMounted ? displayQuantity : 0;
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -117,16 +125,20 @@ export default function MainHeader() {
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
+    // `stale` kills the response race: type "mar" then "marble", and if "mar" resolves second it
+    // must not overwrite "marble"'s results.
+    let stale = false;
     const performSearch = async () => {
       if (debouncedSearchQuery.length > 1) {
         setIsSearching(true);
         try {
           const data = await fetchSearchResults(debouncedSearchQuery);
-          setSearchResults(data.results || []);
+          if (!stale) setSearchResults(data.results || []);
         } catch (err) {
           console.error("Search error:", err);
+          if (!stale) setSearchResults([]);
         } finally {
-          setIsSearching(false);
+          if (!stale) setIsSearching(false);
         }
       } else {
         setSearchResults([]);
@@ -134,6 +146,9 @@ export default function MainHeader() {
     };
 
     performSearch();
+    return () => {
+      stale = true;
+    };
   }, [debouncedSearchQuery]);
 
   const suggestionData = useMemo(() => {
@@ -196,7 +211,8 @@ export default function MainHeader() {
   };
 
   const handleKeyDown = (e) => {
-    if ((e.key === "Tab" || e.key === "ArrowRight") && suggestionSuffix) {
+    // ArrowRight only -- Tab must remain "leave the field", never "accept the ghost text".
+    if (e.key === "ArrowRight" && suggestionSuffix) {
       e.preventDefault();
       setSearchQuery(searchQuery + suggestionSuffix);
     } else if (e.key === "Enter" && searchQuery.trim().length > 0) {
@@ -207,15 +223,9 @@ export default function MainHeader() {
 
   const handleLogout = async () => {
     try {
-      await apiFetch("/api/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({
-          email: user?.email,
-          mobile: user?.mobile,
-          firstName: user?.first_name,
-          lastName: user?.last_name
-        })
-      });
+      // No body: the backend reads nothing from it, and PII in a logout request is PII in access
+      // logs for no reason.
+      await apiFetch("/api/auth/logout", { method: "POST" });
     } catch (err) {
       console.error("Logout request failed:", err);
     } finally {
@@ -223,7 +233,7 @@ export default function MainHeader() {
       dispatch(clearCart());
       dispatch(restoreGuestWishlist());
       const currentPath = window.location.pathname;
-      if (currentPath.startsWith("/account") || currentPath.startsWith("/dashboard")) {
+      if (currentPath.startsWith("/account")) {
         router.push("/login");
       } else {
         router.refresh();
@@ -231,7 +241,7 @@ export default function MainHeader() {
     }
   };
 
-  const showSearch = isSearchOpen || isFocused;
+  const showSearch = isFocused;
 
   return (
     <div className="bg-white relative">
@@ -244,7 +254,14 @@ export default function MainHeader() {
 
         {/* Search Input and Dropdown Wrapper */}
         <div className={`flex-1 max-w-137.5 relative ${showSearch ? "z-1001 overflow-visible" : "z-10"}`}>
-          <div className="relative w-full">
+          {/* Blur is handled here, on the wrapper of input + popup: it only closes when focus
+              actually leaves both, so a click inside the popup never races a timeout. */}
+          <div
+            className="relative w-full"
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false);
+            }}
+          >
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-900 pointer-events-none z-30">
               <Icon as={Search} />
             </div>
@@ -254,9 +271,6 @@ export default function MainHeader() {
                 placeholder=""
                 className="w-full h-full pl-11.25 pr-2.5 py-2 bg-transparent text-base font-medium outline-none relative z-20"
                 onFocus={() => setIsFocused(true)}
-                onBlur={() => {
-                  setTimeout(() => setIsFocused(false), 200);
-                }}
                 onClick={() => {
                   setIsFocused(true);
                 }}
@@ -311,6 +325,12 @@ export default function MainHeader() {
         {/* Right Icons */}
         <div className="flex items-center justify-end ml-auto lg:gap-3 xl:gap-6 text-sm">
 
+          {/* FIRST in the cluster, left of the account and cart icons -- CaratLane's order, and the
+              reason is the reading order: "can you deliver to me" is answered before "what is in my
+              bag". Hidden below lg because MobileHeader carries its own compact version; two of them
+              on a tablet would both be live and disagree about which one the customer just used. */}
+          <PincodeControl className="hidden lg:flex text-subtle" />
+
 
           {signedIn ? (
             <div className="relative group flex items-center">
@@ -321,7 +341,7 @@ export default function MainHeader() {
                 </Avatar>
               </Link>
 
-              <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-64 bg-white shadow-xl rounded-lg opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-50">
+              <div className="absolute top-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-64 bg-white shadow-xl rounded-lg opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 transition-all duration-200 z-50">
                 <div className="px-4 py-3">
                   <p className="text-sm font-semibold">Hi, {user.name}</p>
                   <p className="text-xs text-gray-500 truncate">{user.email}</p>
@@ -400,29 +420,30 @@ export default function MainHeader() {
           )}
 
           {signedIn ? (
-            <Link href="/account/wishlist" prefetch={false} className="relative group p-1">
+            <Link href="/account/wishlist" prefetch={false} aria-label={`Wishlist, ${wishlistCount} items`} className="relative group p-1">
               <Icon as={Heart} />
-              {hasMounted && wishlistItems.length > 0 && (
+              {wishlistCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center">
-                  {wishlistItems.length}
+                  {wishlistCount}
                 </span>
               )}
             </Link>
           ) : (
             <button
               type="button"
+              aria-label={`Wishlist, ${wishlistCount} items`}
               onClick={() => {
                 const path = window.location.pathname;
-                if (path !== "/login" && path !== "/register") {
+                if (path !== "/login") {
                   openLogin();
                 }
               }}
               className="relative group p-1"
             >
               <Icon as={Heart} />
-              {hasMounted && wishlistItems.length > 0 && (
+              {wishlistCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center">
-                  {wishlistItems.length}
+                  {wishlistCount}
                 </span>
               )}
             </button>
@@ -430,12 +451,13 @@ export default function MainHeader() {
           <Link
             href="/checkout/cart"
             prefetch={false}
+            aria-label={`Cart, ${cartCount} items`}
             className="relative group p-1"
           >
             <Icon as={ShoppingBag} />
-            {hasMounted && displayQuantity > 0 && (
+            {cartCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center">
-                {displayQuantity}
+                {cartCount}
               </span>
             )}
           </Link>

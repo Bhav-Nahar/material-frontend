@@ -38,8 +38,14 @@ export default function CouponsPage() {
     };
   }, [accessToken]);
 
-  const copy = (code) => {
-    navigator.clipboard?.writeText(code);
+  const copy = async (code) => {
+    // Only claim "copied" when it actually was -- clipboard is unavailable in insecure contexts
+    // and some webviews, and a false checkmark loses the customer their code.
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      return;
+    }
     setCopied(code);
     setTimeout(() => setCopied((c) => (c === code ? null : c)), 2000);
   };
@@ -52,7 +58,7 @@ export default function CouponsPage() {
     );
   }
 
-  if (error) return <p className="text-sm text-bad">{error}</p>;
+  if (error) return <p role="alert" className="text-sm text-bad">{error}</p>;
 
   if (coupons.length === 0) {
     return (
@@ -80,7 +86,7 @@ export default function CouponsPage() {
           <li
             key={coupon.code}
             className={`flex flex-col border p-4 lg:p-5 ${
-              spent ? "border-line bg-paper" : "border-line-2 bg-surface"
+              spent ? "border-line bg-paper" : "border-line-strong bg-surface"
             }`}
           >
             <div className="flex items-baseline justify-between gap-3">
@@ -111,7 +117,7 @@ export default function CouponsPage() {
               className={`num mt-4 flex items-center justify-center gap-2 border border-dashed py-2.5 text-sm transition-colors ${
                 spent
                   ? "cursor-default border-line text-meta line-through"
-                  : "border-line-2 text-ink hover:border-ink"
+                  : "border-line-strong text-ink hover:border-ink"
               }`}
             >
               {coupon.code}

@@ -116,13 +116,6 @@ export const CATEGORY_IMAGES = Object.fromEntries(
   CATEGORIES.map((c) => [c.title.toUpperCase(), c.image]),
 );
 
-/** Banner rail inside the mobile menu. */
-export const MENU_BANNERS = CATEGORIES.map((c) => ({
-  title: c.title,
-  image: c.image,
-  href: `/collections/${c.handle}`,
-}));
-
 /**
  * Popular searches. Each carries its own destination and thumbnail, so the image matches the term
  * -- rotating through categories positionally put a laminate photo next to "marble-look tiles".
@@ -136,31 +129,3 @@ export const POPULAR_SEARCHES = [
   { term: "600 × 600 floor tiles", href: "/collections/tiles?size=600x600", category: "tiles" },
   { term: "Textured wallpaper", href: "/collections/wallpaper?pattern=plain", category: "wallpaper" },
 ].map((p) => ({ ...p, image: CATEGORIES.find((c) => c.handle === p.category)?.image }));
-
-/**
- * Terms used to build query completions, so "marble" offers "marble tiles",
- * "marble laminates" and so on. Drawn from the same facet vocabulary as the mega menu.
- *
- * CaratLane's search suggests completions rather than previewing products -- typing "gold" gives
- * "gold coin", "gold earrings", "gold rings". Same idea, our vocabulary.
- */
-export const SUGGESTION_TERMS = [
-  { label: "tiles", href: "/collections/tiles" },
-  { label: "laminates", href: "/collections/laminates" },
-  { label: "wallpaper", href: "/collections/wallpaper" },
-  { label: "bathroom tiles", href: "/collections/tiles?room=bathroom" },
-  { label: "kitchen tiles", href: "/collections/tiles?room=kitchen" },
-  { label: "outdoor tiles", href: "/collections/tiles?room=outdoor" },
-  { label: "floor tiles", href: "/collections/tiles?size=600x600" },
-  { label: "wall tiles", href: "/collections/tiles?room=bathroom" },
-  { label: "marble-look tiles", href: "/collections/tiles?look=marble" },
-  { label: "wood-look tiles", href: "/collections/tiles?look=wood" },
-  { label: "cement-look tiles", href: "/collections/tiles?look=cement" },
-  { label: "matte tiles", href: "/collections/tiles?finish=matte" },
-  { label: "glossy tiles", href: "/collections/tiles?finish=glossy" },
-  { label: "anti-skid tiles", href: "/collections/tiles?slip=r11" },
-  { label: "woodgrain laminates", href: "/collections/laminates?look=woodgrain" },
-  { label: "fluted laminates", href: "/collections/laminates?look=fluted" },
-  { label: "floral wallpaper", href: "/collections/wallpaper?pattern=floral" },
-  { label: "textured wallpaper", href: "/collections/wallpaper?pattern=plain" },
-];

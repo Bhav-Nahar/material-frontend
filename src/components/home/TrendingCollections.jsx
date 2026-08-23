@@ -30,7 +30,7 @@ export default async function TrendingCollections({ limit = 8 }) {
     // Room, size and finish are word facets with nothing to photograph.
     const column = menu
       .find((m) => m.href === `/collections/${category.handle}`)
-      ?.columns.find((c) => /look|pattern/i.test(c.title));
+      ?.columns?.find((c) => /look|pattern/i.test(c.title));
 
     return (column?.items ?? []).map((item) => ({
       label: item.label,

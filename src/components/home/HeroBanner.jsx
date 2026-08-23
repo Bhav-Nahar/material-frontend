@@ -12,6 +12,63 @@ import "swiper/css";
 import "swiper/css/navigation";
 import "swiper/css/pagination";
 
+/** One slide's markup, shared by the single-banner and carousel paths so they cannot drift. */
+function SlideBody({ slide, index }) {
+  return (
+    <Link prefetch={false} href={slide.url || "/"} className="block w-full">
+      <div className="relative w-full">
+        {/* Desktop Image */}
+        <div className="relative hidden aspect-hero w-full lg:block">
+          <Image
+            loader={shopifyLoader}
+            src={slide.desktopImage}
+            alt={slide.alt || slide.name || "Hero Banner"}
+            fill
+            priority={index === 0}
+            loading={index === 0 ? "eager" : "lazy"}
+            className="object-cover object-center"
+            sizes="100vw"
+            draggable={false}
+          />
+        </div>
+
+        {/* Mobile Image */}
+        <div className="relative block aspect-hero-mobile w-full lg:hidden">
+          <Image
+            loader={shopifyLoader}
+            src={slide.mobileImage || slide.desktopImage}
+            alt={slide.alt || slide.name || "Hero Banner Mobile"}
+            fill
+            priority={index === 0}
+            loading={index === 0 ? "eager" : "lazy"}
+            className="object-cover object-center"
+            sizes="100vw"
+            draggable={false}
+          />
+        </div>
+
+        {/* Text Overlay for Image Slides */}
+        {(slide.title || slide.subtitle) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-end pb-12 md:pb-24 bg-black/5 z-10">
+            <div className="text-center text-white px-4">
+              {slide.title && (
+                <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-[0.1em] mb-4 drop-shadow-2xl">
+                  {slide.title}
+                </h2>
+              )}
+              {slide.subtitle && (
+                <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] underline underline-offset-[12px] decoration-white/60 hover:decoration-white transition-all drop-shadow-xl cursor-pointer">
+                  {slide.subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
+
 export default function HeroBanner({ slides = [] }) {
   const id = useId().replace(/:/g, "");
   const paginationElClass = `pagination-${id}`;
@@ -79,6 +136,19 @@ export default function HeroBanner({ slides = [] }) {
     );
   }
 
+  // ONE slide needs no carousel: Swiper with loop+autoplay on a single slide logs warnings, runs
+  // timers for nothing, and draws two arrows that do nothing and one lone pagination dot.
+  if (slides.length === 1) {
+    const slide = slides[0];
+    return (
+      <div className="w-full bg-white">
+        <div className={`relative w-full overflow-hidden ${bannerHeightClasses}`}>
+          <SlideBody slide={slide} index={0} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full bg-white">
       <div
@@ -92,6 +162,8 @@ export default function HeroBanner({ slides = [] }) {
           autoplay={{
             delay: 5000,
             disableOnInteraction: false,
+            // WCAG 2.2.2: auto-advancing content needs a way to hold still.
+            pauseOnMouseEnter: true,
           }}
           navigation={{
             nextEl: ".hero-next",
@@ -105,62 +177,7 @@ export default function HeroBanner({ slides = [] }) {
         >
           {slides.map((slide, index) => (
             <SwiperSlide key={slide.id || index}>
-              <Link 
-                prefetch={false} 
-                href={slide.url || '/'} 
-                className="block w-full"
-               
-              >
-                <div className="relative w-full">
-                  {/* Desktop Image */}
-                  <div className="relative hidden aspect-hero w-full lg:block">
-                    <Image
-                      loader={shopifyLoader}
-                      src={slide.desktopImage}
-                      alt={slide.alt || slide.name || "Hero Banner"}
-                      fill
-                      priority={index === 0}
-                      loading={index === 0 ? "eager" : "lazy"}
-                      className="object-cover object-center"
-                      sizes="100vw"
-                      draggable={false}
-                    />
-                  </div>
-
-                  {/* Mobile Image */}
-                  <div className="relative block aspect-hero-mobile w-full lg:hidden">
-                    <Image
-                      loader={shopifyLoader}
-                      src={slide.mobileImage || slide.desktopImage}
-                      alt={slide.alt || slide.name || "Hero Banner Mobile"}
-                      fill
-                      priority={index === 0}
-                      loading={index === 0 ? "eager" : "lazy"}
-                      className="object-cover object-center"
-                      sizes="100vw"
-                      draggable={false}
-                    />
-                  </div>
-
-                  {/* Text Overlay for Image Slides */}
-                  {(slide.title || slide.subtitle) && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-end pb-12 md:pb-24 bg-black/5 z-10">
-                      <div className="text-center text-white px-4">
-                        {slide.title && (
-                          <h2 className="text-3xl md:text-5xl font-semibold uppercase tracking-[0.1em] mb-4 drop-shadow-2xl">
-                            {slide.title}
-                          </h2>
-                        )}
-                        {slide.subtitle && (
-                          <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] underline underline-offset-[12px] decoration-white/60 hover:decoration-white transition-all drop-shadow-xl cursor-pointer">
-                            {slide.subtitle}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Link>
+              <SlideBody slide={slide} index={index} />
             </SwiperSlide>
           ))}
         </Swiper>
@@ -168,11 +185,11 @@ export default function HeroBanner({ slides = [] }) {
         {/* Navigation Buttons */}
         {/* Charcoal, like the card controls: these sit on a photograph, and a white plate over a
             pale banner is barely an edge. Controls on the page itself stay white. */}
-        <button className="hero-prev absolute left-4 top-1/2 -translate-y-1/2 z-20 hidden md:flex w-12 h-12 rounded-sm bg-surface/60 backdrop-blur-md items-center justify-center text-ink hover:bg-surface transition-colors duration-300">
+        <button aria-label="Previous slide" className="hero-prev absolute left-4 top-1/2 -translate-y-1/2 z-20 hidden md:flex w-12 h-12 rounded-sm bg-surface/60 backdrop-blur-md items-center justify-center text-ink hover:bg-surface transition-colors duration-300">
           <ChevronLeft size={24} />
         </button>
 
-        <button className="hero-next absolute right-4 top-1/2 -translate-y-1/2 z-20 hidden md:flex w-12 h-12 rounded-sm bg-surface/60 backdrop-blur-md items-center justify-center text-ink hover:bg-surface transition-colors duration-300">
+        <button aria-label="Next slide" className="hero-next absolute right-4 top-1/2 -translate-y-1/2 z-20 hidden md:flex w-12 h-12 rounded-sm bg-surface/60 backdrop-blur-md items-center justify-center text-ink hover:bg-surface transition-colors duration-300">
           <ChevronRight size={24} />
         </button>
 

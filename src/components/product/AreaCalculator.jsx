@@ -172,9 +172,11 @@ export default function AreaCalculator({
 
       {hasCoverage && (
         <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-xs text-ink">
-          <input type="checkbox" checked={wastage} onChange={toggleWastage} className="sr-only" />
+          {/* peer/peer-focus-visible: the real input is sr-only, so without this the painted box
+              shows nothing when the checkbox is focused from the keyboard. */}
+          <input type="checkbox" checked={wastage} onChange={toggleWastage} className="peer sr-only" />
           <span
-            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border ${
+            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border peer-focus-visible:ring-2 peer-focus-visible:ring-action ${
               wastage ? "border-action bg-action" : "border-line-strong bg-surface"
             }`}
           >

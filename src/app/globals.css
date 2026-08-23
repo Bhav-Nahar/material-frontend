@@ -1,4 +1,14 @@
 @import "tailwindcss";
+/* THE KEYFRAMES BEHIND EVERY SHEET AND DIALOG. Radix does not animate anything itself -- it only
+   flips `data-state` between "open" and "closed" and waits for the CSS animation to finish. The
+   `animate-in`, `animate-out`, `slide-in-from-*`, `fade-in-*` and `zoom-in-*` classes that shadcn's
+   sheet.jsx and dialog.jsx are built out of come from HERE, not from Tailwind core.
+   
+   Without this import every one of those class names compiles to nothing, which is not a visible
+   error anywhere -- the panels simply appear and disappear instantly, and it reads as a design
+   choice rather than a missing dependency (user, 2026-08-23: "everything is so quick and snappy, no
+   animation still"). If a sheet ever loses its animation again, look here first. */
+@import "tw-animate-css";
 
 /* ==========================================================================
    Material — design tokens
@@ -34,8 +44,25 @@
   --on-action: #101010;   /* 5.1:1 on orange; white would be 2.8:1 */
   --action-text: #b84e00; /* the only legible orange ink */
   --good: #1e6b45;
+  /* An OPAQUE tint of --good, for the confirmation toast. It has to be opaque: as `--good/10` the
+     band let the product photograph through and the green went muddy over anything dark. */
+  --good-wash: #e7f1eb;
   --warn: #96650f;
   --bad: #a62a22;
+
+  /* RATING GOLD — the one deliberate exception to §04's single accent (user, 2026-08-22).
+     Orange stars read as a control on this palette, because orange is what every button on the
+     site is; gold is what a star has meant since long before the web, and a rating is the one
+     place the convention is stronger than the brand.
+
+     TWO VALUES, not one, and this is the whole trick. Classic gold is a LIGHT colour: #f0a500 is
+     2.08:1 on white, so a star painted in it flat is a pale smudge and fails WCAG 1.4.11's 3:1 for
+     a meaningful graphic. So the fill stays bright and the STROKE carries the legibility --
+     #a8760a is 3.99:1 on white and 3.77:1 on cream. The shape is readable at 11px, and it still
+     looks like gold rather than the olive-brown a single compliant value forces.
+     Do not "simplify" these into one token; that is how the stars go pale. */
+  --gold: #f0a500;
+  --gold-line: #a8760a;
 
   /* §06 says 2px. Currently trialling 4px -- change this one value, nothing else. */
   --brand-radius: 4px;
@@ -91,8 +118,25 @@
   --color-on-action: var(--on-action);
   --color-action-ink: var(--action-text);
   --color-good: var(--good);
+  --color-good-wash: var(--good-wash);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
+  /* Ratings only -- see the note in :root. `fill-gold text-gold-line` is the pair. */
+  --color-gold: var(--gold);
+  --color-gold-line: var(--gold-line);
+
+  /* MOTION. Two curves and two durations, because that is all an overlay needs.
+     Everything that enters uses `ease-entrance` and the longer duration; everything that leaves uses
+     `ease-exit` and the shorter one -- entering is a thing arriving and wants to decelerate into
+     place, leaving is a thing dismissed and should get out of the way. Symmetric timing is what made
+     the sheets feel slow: the same 500ms that reads as smooth on the way in reads as a delay on the
+     way out, when the customer has already decided.
+
+     ease-entrance is an expo-out: almost all of the distance is covered in the first third, so the
+     panel feels like it is being placed rather than dragged. shadcn's default `ease-in-out` spends
+     the opening third accelerating, which on a 380px sheet is 100ms of nothing happening. */
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
   /* §05 — self-hosted; set by next/font/local in layout.js */
   --font-display: var(--font-display-face), system-ui, sans-serif;
@@ -217,9 +261,11 @@
   box-shadow: 0 0 0 1px var(--line-2), 0 12px 32px rgb(28 27 25 / 12%);
 }
 
-/* §11 crops: hero CaratLane-wide on desktop, square on mobile, swatch 1:1 */
+/* §11 crops: hero CaratLane-wide on desktop, 4:5 portrait on mobile, swatch 1:1 */
 @utility aspect-hero { aspect-ratio: 123 / 44; }   /* 2.7955 -- CaratLane desktop, measured live */
-@utility aspect-hero-mobile { aspect-ratio: 1 / 1; }
+/* 4/5, matching the shipped 1122x1402 mobile asset (see data/banners.js) -- at 1/1 object-cover
+   was cropping ~20% of the composed banner off the top and bottom on every phone. */
+@utility aspect-hero-mobile { aspect-ratio: 4 / 5; }
 @utility aspect-swatch { aspect-ratio: 1 / 1; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -311,3 +357,73 @@
 }
 
 .policy-prose img { border: 1px solid var(--line); }
+
+/* ----------------------------------------------------- lighting preview slider
+   The Kelvin slider in LightingPreview. A native <input type="range"> does the keyboard handling,
+   the ARIA role and the drag for free; only the paint is custom, and the thumb pseudo-elements
+   cannot be reached from an inline style, so the rules live here.
+
+   The gradient track and the thumb colour come in as the `--track` and `--thumb` custom properties
+   from the component -- they are derived from the same blackbody curve as the filter itself, so the
+   control cannot drift out of step with what it does to the photograph. */
+.lighting-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lighting-slider::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--track);
+}
+.lighting-slider::-moz-range-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--track);
+}
+
+/* The thumb is a ring of page background around the temperature's own colour, so it stays visible
+   at both ends of the track -- a plain white thumb disappears into the cream middle. */
+.lighting-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1.125rem;
+  width: 1.125rem;
+  margin-top: -0.34rem;
+  border-radius: 999px;
+  background: var(--thumb);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--charcoal);
+}
+.lighting-slider::-moz-range-thumb {
+  height: 1.125rem;
+  width: 1.125rem;
+  border-radius: 999px;
+  background: var(--thumb);
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--charcoal);
+}
+
+.lighting-slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--charcoal);
+  outline-offset: 2px;
+}
+.lighting-slider:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--charcoal);
+  outline-offset: 2px;
+}
+
+/* While the PDP's lighting preview is open, the WhatsApp/call FABs step aside. Phones only: there
+   the preview bar sits in the flow and the fixed FABs landed on top of its slider, making the cool
+   end of the track unreachable. From lg the bar is a centred floating card and they never meet. */
+@media (max-width: 1023.98px) {
+  body[data-lighting-preview] [data-floating-contact] {
+    display: none;
+  }
+}

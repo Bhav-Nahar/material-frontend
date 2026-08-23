@@ -4,6 +4,9 @@ import { rootPersistConfig } from "./persist";
 import createWebStorage from "redux-persist/lib/storage/createWebStorage";
 
 import { gtmListener } from "./gtmListener";
+import { toastListener } from "./toastListener";
+import { pincodeListener } from "./pincodeListener";
+import { wishlistSyncListener } from "./wishlistSyncListener";
 import userReducer from "./features/user/userSlice";
 import cartReducer from "./features/cart/cartSlice";
 import wishlistReducer from "./features/wishlist/wishlistSlice";
@@ -72,7 +75,16 @@ export const store = configureStore({
       // PREPENDED, so it sees the action before anything else can swallow it, and so
       // getOriginalState() is genuinely the state before the cart reducer ran -- which is the only
       // place a line removed by this action still exists to be reported. See gtmListener.js.
-    }).prepend(gtmListener.middleware),
+      // toastListener is prepended alongside it for the same getOriginalState() reason: a removed
+      // cart line only still exists in the state BEFORE the reducer ran.
+    }).prepend(
+      gtmListener.middleware,
+      toastListener.middleware,
+      pincodeListener.middleware,
+      // Prepended for the same reason: the removed wishlist row only still exists in the state
+      // before the reducer ran, and that row carries the productId the DELETE needs.
+      wishlistSyncListener.middleware,
+    ),
 });
 
 export const persistor = persistStore(store);

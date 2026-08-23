@@ -8,7 +8,11 @@ import { Check, Package } from "lucide-react";
 import { GTM_PURCHASE_KEY, pushPurchase } from "@/lib/gtm";
 
 function SuccessInner() {
-  const orderName = useSearchParams().get("order");
+  // Constrained to an order-name shape ("#1024", "MAT-1042"). This page renders whatever the query
+  // says onto an official-looking receipt, so a crafted link must not be able to put arbitrary
+  // text ("#CALL-99999-TO-CLAIM") into it.
+  const rawOrder = useSearchParams().get("order");
+  const orderName = /^#?[\w-]{1,24}$/.test(rawOrder || "") ? rawOrder : null;
 
   /**
    * purchase, from the payload the payment page wrote before opening Razorpay -- the cart it
@@ -28,7 +32,9 @@ function SuccessInner() {
     } catch {
       return;
     }
-    if (payload) pushPurchase(payload);
+    // The handler stamps transaction_id after the money moves. A payload without one is a stash
+    // from a payment that never completed -- discard it rather than report phantom revenue.
+    if (payload?.transaction_id) pushPurchase(payload);
   }, []);
 
   return (

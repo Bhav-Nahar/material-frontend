@@ -280,7 +280,7 @@ export default function SearchPopup({
                     onClick={onClose}
                     className="text-primary font-bold text-xs md:text-sm underline underline-offset-4 decoration-primary/30 hover:decoration-primary transition-all uppercase tracking-widest"
                   >
-                    View All Results for "{searchQuery}"
+                    View All Results for &ldquo;{searchQuery}&rdquo;
                   </Link>
                 </div>
               )}

@@ -41,8 +41,11 @@ export default function AccountLayout({ children }) {
   const section = ACCOUNT_SECTIONS.find((s) => pathname.startsWith(s.href));
 
   useEffect(() => {
-    if (rehydrated && !isAuthenticated) router.replace("/login");
-  }, [rehydrated, isAuthenticated, router]);
+    // Carry the destination: an emailed link to /account/orders opened on a new device should land
+    // on the orders after login, not on the homepage.
+    if (rehydrated && !isAuthenticated)
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+  }, [rehydrated, isAuthenticated, router, pathname]);
 
   // Nothing until we know. A flash of the account shell followed by a bounce to /login reads as a
   // bug even when the outcome is correct.

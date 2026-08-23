@@ -21,7 +21,7 @@ export const HOME_FAQS = [
     question: "Why is the price per square foot when I pay by the box?",
     answer:
       "Tiles are compared per square foot and sold by the box, so we show both: the per-sq-ft rate to judge it against another tile, and the box price you actually pay. A box covers a fixed area, and we can only sell whole boxes.",
-    link: { href: "/pages/pricing", text: "How we price" },
+    // No link: /pages/pricing does not exist in Shopify (see data/footer.js) — restore when it does.
   },
   {
     // CONFIRMED -- trade-standard arithmetic, not a Material-specific promise.
@@ -34,7 +34,7 @@ export const HOME_FAQS = [
     question: "Can I see a sample before I order?",
     answer:
       "Yes. Samples are ₹99 each and the amount comes off your order when you buy. Screens lie about colour and nothing about a tile's finish survives a photograph, so for anything going on a large floor we would rather you held one first.",
-    link: { href: "/pages/samples", text: "Order samples" },
+    // No link: /pages/samples does not exist in Shopify (see data/footer.js) — restore when it does.
   },
   {
     // CONFIRMED -- announcement bar: Mumbai and MMR, freight quoted before you pay.
@@ -62,7 +62,7 @@ export const HOME_FAQS = [
     question: "Do you install as well?",
     answer:
       "We are a materials supplier, not a contractor, but we can put you in touch with fitters who work with these materials regularly and advise your own mason on adhesive, spacing and laying pattern.",
-    link: { href: "/pages/installation", text: "Installation support" },
+    // No link: /pages/installation does not exist in Shopify (see data/footer.js) — restore when it does.
   },
   {
     // PLACEHOLDER -- confirm real lead times for stock vs made-to-order.

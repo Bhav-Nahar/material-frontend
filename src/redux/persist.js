@@ -1,5 +1,4 @@
 import createWebStorage from "redux-persist/lib/storage/createWebStorage";
-import { persistReducer } from "redux-persist";
 
 const createNoopStorage = () => {
   return {
@@ -23,6 +22,3 @@ export const rootPersistConfig = {
   storage,
   whitelist: ["user", "cart", "wishlist", "recentlyViewed"], // persist wishlist and recently viewed list
 };
-
-export const persistUserReducer = (reducer) =>
-  persistReducer(rootPersistConfig, reducer);

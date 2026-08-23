@@ -38,7 +38,10 @@ function SheetOverlay({
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-[500] bg-black/50",
+        // DURATIONS MATCHED TO THE PANEL. Stock shadcn sets none here, so the scrim inherited the
+        // 150ms default while the panel took 500 -- the page went dark, then a third of a second
+        // later something slid in. They are one gesture and have to be one timing.
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:duration-[320ms] data-[state=closed]:duration-[200ms] ease-entrance fixed inset-0 z-[500] bg-black/45 backdrop-blur-[2px]",
         className
       )}
       {...props} />
@@ -58,7 +61,14 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-[500] flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+          // 320ms in on an expo-out, 200ms out on an accelerate -- see the motion note in globals.css
+          // for why the two are not the same number. The stock 500/300 with `ease-in-out` is what
+          // made every sheet in the app feel like it was thinking about it.
+          //
+          // `transition` is dropped: there is nothing here to transition. Radix animates these with
+          // keyframes (animate-in / animate-out), and the stray shorthand only added a competing
+          // 150ms transition on every animatable property, including the transform the keyframes own.
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:duration-[320ms] data-[state=closed]:duration-[200ms] data-[state=open]:ease-entrance data-[state=closed]:ease-exit fixed z-[500] flex flex-col gap-4 shadow-[0_16px_48px_rgba(28,27,25,0.22)]",
           side === "right" &&
           "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
           side === "left" &&

@@ -100,6 +100,14 @@ export default function Navbar({ hideTop, menuData }) {
                 key={menu.label}
                 onMouseEnter={() => handleEnter(index)}
                 onMouseLeave={handleLeave}
+                // Keyboard parity with the hover handlers: blur only counts as "left" when focus
+                // has moved outside the item, and Escape closes the dropdown outright.
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) handleLeave();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") closeMenu();
+                }}
                 className="relative"
               >
                 {isClickable ? (
@@ -107,6 +115,8 @@ export default function Navbar({ hideTop, menuData }) {
                     href={menu.href}
                     prefetch={false}
                     onClick={closeMenu}
+                    onFocus={() => handleEnter(index)}
+                    aria-expanded={hasDropdown(menu) ? activeMenu === index : undefined}
                     className={cn(
                       "block py-4 tracking-normal transition-all duration-200 uppercase text-sm leading-none font-medium",
                       isActive || isHovered
@@ -155,6 +165,8 @@ export default function Navbar({ hideTop, menuData }) {
               transition={{ duration: 0.2 }}
               onMouseEnter={() => handleEnter(activeMenu)}
               onMouseLeave={handleLeave}
+              // Tabbing into the panel must cancel the close timer the trigger's blur started.
+              onFocus={() => handleEnter(activeMenu)}
               className="absolute left-0 top-full w-full bg-white shadow-xl z-50 border-t border-gray-200"
             >
             <div className="container-main mx-auto py-8">
@@ -183,7 +195,7 @@ export default function Navbar({ hideTop, menuData }) {
 
                   menu.columns?.forEach(col => {
                     const title = col.title?.toLowerCase();
-                    const isByStyle = title.includes("style");
+                    const isByStyle = title?.includes("style");
                     weights.push(isByStyle ? 2.2 : 1); 
                   });
 
@@ -310,7 +322,7 @@ export default function Navbar({ hideTop, menuData }) {
                       {/* TEXT COLUMNS (RESTORED ICON LOGIC) */}
                       {menu.columns?.map((col, i) => {
                         const title = col.title?.toLowerCase();
-                        const isGridCol = title.includes("style");
+                        const isGridCol = title?.includes("style");
 
                         return (
                           <div key={i} className={cn(isGridCol && "col-span-1")}>

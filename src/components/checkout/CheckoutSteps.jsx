@@ -43,7 +43,7 @@ export default function CheckoutSteps() {
                     ? "border-ink bg-ink text-paper"
                     : done
                       ? "border-good/40 bg-good/10 text-good"
-                      : "border-line-2 text-meta"
+                      : "border-line-strong text-meta"
                 }`}
               >
                 {done ? <Check size={11} strokeWidth={2.5} /> : i + 1}
@@ -52,7 +52,7 @@ export default function CheckoutSteps() {
               <span className="max-sm:hidden">{step.label}</span>
             </span>
             {i < STEPS.length - 1 && (
-              <span className={`h-px w-6 sm:w-10 ${done ? "bg-good/40" : "bg-line-2"}`} />
+              <span className={`h-px w-6 sm:w-10 ${done ? "bg-good/40" : "bg-line-strong"}`} />
             )}
           </li>
         );

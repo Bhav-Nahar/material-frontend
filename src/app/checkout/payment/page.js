@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
@@ -17,9 +17,9 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { apiFetch, fetchCustomerAddresses } from "@/lib/api";
+import { addressKey, apiFetch, fetchCustomerAddresses } from "@/lib/api";
 import { advanceFor, PAYMENT_MODES } from "@/lib/payment-modes";
-import { GST_RATE, unloadingCharge } from "@/lib/delivery-charges";
+import { gstBreakdown, unloadingCharge } from "@/lib/delivery-charges";
 import { getStoredUtms } from "@/lib/attribution";
 import {
   GTM_PURCHASE_KEY,
@@ -35,21 +35,16 @@ import { formatPrice } from "@/utils/formatPrice";
 
 const RAZORPAY_SDK = "https://checkout.razorpay.com/v1/checkout.js";
 
-/**
- * The stable half of a customer address id, and the reason this page could not price a carry.
- *
- * Shopify hands back
- *   gid://shopify/MailingAddress/1100377…?model_name=CustomerAddress&customer_access_token=…
- *
- * — the SESSION'S ACCESS TOKEN is inside the id. The shipping page put that whole string in the URL;
- * this page fetched the addresses again and compared. The moment the token differs (a refreshed
- * session, a reopened tab) nothing matched, so the address resolved to null, so the floor and lift
- * were unknown, so the doorstep charge quoted one screen earlier silently became "to be confirmed"
- * — while the server, which keys on the numeric id, went on billing it.
- *
- * The backend has had `addressMeta.addressKey` for exactly this since the beginning.
- */
-const addressKey = (gid) => String(gid || "").match(/MailingAddress\/(\d+)/)?.[1] || String(gid || "");
+// The invoice details the shipping step collected. In sessionStorage rather than the query string:
+// email, phone and GSTIN in a URL land in browser history, server logs and analytics
+// page_location. Refresh-safe, and gone with the tab.
+const readInvoice = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem("checkout_invoice") || "{}") || {};
+  } catch {
+    return {};
+  }
+};
 
 function PaymentInner() {
   const router = useRouter();
@@ -61,26 +56,30 @@ function PaymentInner() {
   // Absent on a link from an older tab; the server falls back to the delivery address, which is what
   // "same as delivery" means anyway.
   const billingAddressId = params.get("billing");
-  // The rest of what the shipping step collected. It used to arrive here and go no further; the
-  // delivery option prices the carry and the other three are what the invoice is made out to, so
-  // all four now travel to the server with the order.
   const deliveryOption = params.get("delivery") === "doorstep" ? "doorstep" : "ground";
-  const invoiceEmail = params.get("email") || "";
-  const gstin = params.get("gstin") || "";
-  const company = params.get("company") || "";
+  // Lazy initializer so sessionStorage is only touched on the client -- this page is prerendered.
+  const [invoice] = useState(() => (typeof window === "undefined" ? {} : readInvoice()));
+  const invoiceEmail = invoice.email || "";
+  const contactPhone = invoice.phone || "";
+  const gstin = invoice.gstin || "";
+  const company = invoice.company || "";
   const user = useSelector((state) => state.user.user);
   const accessToken = useSelector((state) => state.user.accessToken);
   const isAuthenticated = useSelector((state) => state.user.isAuthenticated);
-  const { items, totalAmount, totalQuantity, cartId, totalWeightKg, appliedCoupon } = useSelector(
-    (state) => state.cart,
-  );
+  const { items, totalAmount, totalQuantity, cartId, totalWeightKg, appliedCoupon, subtotal } =
+    useSelector((state) => state.cart);
 
   // Full payment by default: it is the cheaper promise to keep and the one with no doorstep cash to
   // count. Part-payment is offered, not pushed.
   const [paymentMode, setPaymentMode] = useState("full");
   const [sdkReady, setSdkReady] = useState(false);
+  const [sdkTry, setSdkTry] = useState(0);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState(null);
+  // Money moved but the order could not be confirmed. TERMINAL for this page: the Pay button must
+  // never re-arm over a warning that says "do not pay again" -- an anxious retry here is a double
+  // charge against the same cart.
+  const [paidUnconfirmed, setPaidUnconfirmed] = useState(false);
 
   // Where it is going, shown rather than assumed. The customer chose this address one screen ago and
   // is about to pay against it; making them go back to check is how a confident checkout loses one.
@@ -124,12 +123,10 @@ function PaymentInner() {
   const payableNow = paymentMode === "ppcod" ? advance : orderTotal;
   const balanceDue = Math.max(0, orderTotal - advance);
 
-  // Shopify quotes tax-inclusive on an Indian storefront, so GST is extracted from the goods total,
-  // never added to it. Same arithmetic as the cart and shipping pages, and it has to agree with
-  // them -- a total that changes between two screens is the loudest possible reason to abandon a
-  // checkout. The unloading charge sits outside this: it is a service line, taxed on its own terms.
-  const taxableBase = Math.round((totalAmount / (1 + GST_RATE)) * 100) / 100;
-  const gstAmount = Math.round((totalAmount - taxableBase) * 100) / 100;
+  // Subtotal / GST / Discount, shared with the cart and shipping pages so the three screens cannot
+  // disagree -- a total that changes between two screens is the loudest possible reason to abandon
+  // a checkout. The unloading charge sits outside this: a service line, taxed on its own terms.
+  const { saving, taxableBase, gstAmount, savingShown } = gstBreakdown(subtotal, totalAmount);
 
   /**
    * Two refs, both learned from GlassQuick's production incidents.
@@ -144,6 +141,9 @@ function PaymentInner() {
    */
   const paidRef = useRef(false);
   const failedRef = useRef(null);
+  // Mirrors paidRef for RENDER (the confirming overlay, the empty-cart guard) -- reading a ref
+  // during render is unreliable under the React Compiler; the ref stays for the Razorpay callbacks.
+  const [paid, setPaid] = useState(false);
 
   useEffect(() => {
     dispatch(syncCart());
@@ -194,18 +194,28 @@ function PaymentInner() {
   ]);
 
   // Loaded here rather than in the root layout: the SDK is ~90KB and every other page on the site
-  // has no use for it.
+  // has no use for it. `sdkTry` re-runs the effect from the Retry button -- one flaky-network
+  // moment on a phone must not permanently brick the Pay button until a hard refresh.
+  const [sdkFailed, setSdkFailed] = useState(false);
   useEffect(() => {
     if (window.Razorpay) return setSdkReady(true);
     const script = document.createElement("script");
     script.src = RAZORPAY_SDK;
-    script.onload = () => setSdkReady(true);
-    script.onerror = () => setError("Could not reach the payment provider. Check your connection.");
+    script.onload = () => {
+      setSdkReady(true);
+      setSdkFailed(false);
+    };
+    script.onerror = () => {
+      setSdkFailed(true);
+      setError("Could not reach the payment provider. Check your connection.");
+    };
     document.body.appendChild(script);
     return () => script.remove();
-  }, []);
+  }, [sdkTry]);
 
-  const pay = useCallback(async () => {
+  // A plain function, not useCallback: its only consumer is the Pay button's onClick, so there is
+  // no memoized child to keep referentially stable — and the compiler can memoize it itself.
+  const pay = async () => {
     setError(null);
     setPaying(true);
     paidRef.current = false;
@@ -215,8 +225,9 @@ function PaymentInner() {
       // The server reads the amount off the Shopify cart. Nothing here sends a price.
       const order = await apiFetch("/api/payment/razorpay/order", {
         method: "POST",
-        // A MODE and an OPTION, never an amount. The server decides what 25% of this cart is, and
-        // what carrying it up four floors costs.
+        // A MODE and an OPTION, never an amount. The server decides what the advance on this cart
+        // is (ADVANCE_PERCENT lives in backend lib/paymentModes.js; the frontend copy is cosmetic),
+        // and what carrying it up four floors costs.
         body: JSON.stringify({
           cartId,
           addressId,
@@ -224,6 +235,9 @@ function PaymentInner() {
           paymentMode,
           deliveryOption,
           invoiceEmail,
+          // The number the driver calls before delivery -- collected and validated one screen ago,
+          // and an order without it fails at the doorstep, not before.
+          contactPhone,
           gstin,
           company,
           // The campaign that earned this order, carried from the landing page. Sent at pay time
@@ -252,6 +266,7 @@ function PaymentInner() {
         handler: async (response) => {
           // Money has moved. Mark it before anything else can run.
           paidRef.current = true;
+          setPaid(true);
           try {
             const done = await apiFetch("/api/payment/razorpay/complete", {
               method: "POST",
@@ -280,7 +295,9 @@ function PaymentInner() {
             );
           } catch (err) {
             // Paid, but the order did not land. Never say "payment failed" here — it did not, and
-            // the payment id is the customer's evidence.
+            // the payment id is the customer's evidence. `paidUnconfirmed` keeps the Pay button
+            // dead: the money has moved, and the one wrong answer is charging it again.
+            setPaidUnconfirmed(true);
             setError(
               `Your payment went through (${response.razorpay_payment_id}) but we could not confirm the order. ` +
                 `Please contact us with that reference — do not pay again.`,
@@ -292,6 +309,11 @@ function PaymentInner() {
         modal: {
           ondismiss: () => {
             if (paidRef.current) return; // success already handled this
+            // No payment happened, so the purchase payload written before the modal opened must
+            // not survive -- a later visit to /checkout/success would fire a phantom `purchase`.
+            try {
+              window.localStorage.removeItem(GTM_PURCHASE_KEY);
+            } catch {}
             setPaying(false);
             setError(
               failedRef.current
@@ -370,26 +392,7 @@ function PaymentInner() {
       setError(err?.message || "Could not start the payment. Please try again.");
       setPaying(false);
     }
-  }, [
-    cartId,
-    addressId,
-    billingAddressId,
-    paymentMode,
-    deliveryOption,
-    invoiceEmail,
-    gstin,
-    company,
-    user,
-    dispatch,
-    router,
-    // Read inside for the analytics payloads only; none of them change what is charged.
-    items,
-    appliedCoupon,
-    payableNow,
-    orderTotal,
-    gstAmount,
-    unloading.amount,
-  ]);
+  };
 
   if (!rehydrated) {
     return (
@@ -402,7 +405,7 @@ function PaymentInner() {
   // ...unless we just emptied it ourselves. The order is placed, the cart is gone, and the redirect
   // to the confirmation page is one tick away -- telling that customer their cart is empty is how a
   // paid order looks like a lost one for a beat. The overlay below covers the gap instead.
-  if (items.length === 0 && !paidRef.current) {
+  if (items.length === 0 && !paid) {
     return (
       <div className="container-main py-16 text-center">
         <p className="text-sm text-subtle">Your cart is empty.</p>
@@ -455,7 +458,7 @@ function PaymentInner() {
                   <span className="flex items-start gap-3">
                     <span
                       className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border ${
-                        active ? "border-ink" : "border-line-2"
+                        active ? "border-ink" : "border-line-strong"
                       }`}
                     >
                       {active && <span className="size-2 rounded-full bg-action" />}
@@ -598,6 +601,14 @@ function PaymentInner() {
                 <dd>₹{formatPrice(gstAmount)}</dd>
               </div>
 
+              {/* The coupon, still itemized on the page that charges the card. */}
+              {saving > 0 && (
+                <div className="flex items-baseline justify-between text-good">
+                  <dt>Discount{appliedCoupon?.code ? ` · ${appliedCoupon.code}` : ""}</dt>
+                  <dd>−₹{formatPrice(savingShown)}</dd>
+                </div>
+              )}
+
               {/* Same line, same wording as the shipping page. The customer agreed to this number
                   one screen ago and it must still be here. */}
               <div className="flex items-baseline justify-between text-subtle">
@@ -638,7 +649,24 @@ function PaymentInner() {
             </dl>
 
             {error && (
-              <p className="mt-4 border border-bad/30 bg-bad/5 p-3 text-sm text-bad">{error}</p>
+              <p role="alert" className="mt-4 border border-bad/30 bg-bad/5 p-3 text-sm text-bad">
+                {error}
+              </p>
+            )}
+
+            {/* The SDK failed to load. A dead Pay button with no way back is an abandoned order;
+                the retry re-runs the loader effect. */}
+            {sdkFailed && !sdkReady && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setSdkTry((t) => t + 1);
+                }}
+                className="mt-2 text-sm text-action-ink underline underline-offset-2"
+              >
+                Retry loading the payment window
+              </button>
             )}
 
             {/* The carry is priced from the delivery address. If it will not load we cannot show
@@ -670,7 +698,11 @@ function PaymentInner() {
               <Button
                 onClick={pay}
                 disabled={
-                  !sdkReady || paying || !cartId || (deliveryOption === "doorstep" && !shipTo)
+                  !sdkReady ||
+                  paying ||
+                  !cartId ||
+                  paidUnconfirmed ||
+                  (deliveryOption === "doorstep" && !shipTo)
                 }
                 className="w-full lg:mt-5"
               >
@@ -713,7 +745,7 @@ function PaymentInner() {
       {/* Covers the window between a successful payment and the confirmation page. Without it the
           cart empties under the customer and they see a blank checkout for a beat, which is exactly
           the moment somebody hits refresh. */}
-      {paying && paidRef.current && (
+      {paying && paid && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-paper/95">
           <Loader2 className="size-6 animate-spin text-action" />
           <p className="text-sm text-ink">Confirming your order — do not close this page.</p>

@@ -86,3 +86,28 @@ export function unloadingCharge({ option, weightKg, floor, liftAvailable }) {
 // 18% on tiles, laminates and most building materials. Shown as a line the customer can see rather
 // than folded silently into the price.
 export const GST_RATE = 0.18;
+
+/**
+ * The summary rows every checkout screen prints: Subtotal (excl. GST), GST, Discount.
+ *
+ * ONE function, three pages (cart, shipping, payment), because the pages' own comments are right:
+ * a breakdown that changes between two screens is the loudest reason to abandon a checkout.
+ *
+ * Shopify prices are GST-INCLUSIVE, so GST is EXTRACTED, never added — and extracted from the
+ * PRE-discount subtotal, with the coupon as its own row. Extracting from the discounted total and
+ * then subtracting the discount again made the rows sum to less than the Total under them.
+ *
+ * Rounded as ONE SET: GST is "the rest" of the base after the subtotal row, the shown discount is
+ * "the rest" of the base after the total — so taxableBase + gstAmount − savingShown always equals
+ * the rounded total exactly, whatever paise the inputs carry.
+ */
+export function gstBreakdown(subtotal, totalAmount) {
+  // Guarded: a cart rehydrated from an older snapshot has no `subtotal`, and 0 − total would print
+  // a discount nobody was given.
+  const saving = subtotal > totalAmount ? subtotal - totalAmount : 0;
+  const base = saving > 0 ? subtotal : totalAmount;
+  const taxableBase = Math.round(base / (1 + GST_RATE));
+  const gstAmount = Math.round(base) - taxableBase;
+  const savingShown = Math.round(base) - Math.round(totalAmount);
+  return { saving, taxableBase, gstAmount, savingShown };
+}

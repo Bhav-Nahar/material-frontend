@@ -36,7 +36,6 @@ const userSlice = createSlice({
       state.collectionContext = action.payload;
     },
     logout: (state) => {
-      console.log("[userSlice] Logging out user and clearing session.");
       state.user = null;
       state.accessToken = null;
       state.isAuthenticated = false;

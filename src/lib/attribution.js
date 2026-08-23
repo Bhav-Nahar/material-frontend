@@ -93,5 +93,7 @@ export const saveUtmsFromUrl = (searchParams) => {
   } catch {
     // Private mode, or a full quota. The cookie below is the one that matters.
   }
-  document.cookie = `${KEY}=${value}; max-age=${MAX_AGE_DAYS * 24 * 60 * 60}; path=/; SameSite=Lax`;
+  // Secure only where it can be honoured -- localhost dev is plain http.
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${KEY}=${value}; max-age=${MAX_AGE_DAYS * 24 * 60 * 60}; path=/; SameSite=Lax${secure}`;
 };

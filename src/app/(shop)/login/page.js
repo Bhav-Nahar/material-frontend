@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSelector } from "react-redux";
 
 import AuthForm from "@/components/auth/AuthForm";
@@ -17,20 +17,35 @@ import { useRehydrated } from "@/hooks/useRehydrated";
  * away with the naive version only because PersistGate blocks its whole tree; see
  * src/redux/provider.js.
  */
-export default function LoginPage() {
+function LoginInner() {
   const router = useRouter();
   const rehydrated = useRehydrated();
   const isAuthenticated = useSelector((state) => state.user.isAuthenticated);
 
+  // Where to go after signing in. Same-origin paths only: an absolute URL here would make this
+  // page an open redirect. Without it, an emailed link to /account/orders bounced through login
+  // and landed on the homepage.
+  const rawNext = useSearchParams().get("next");
+  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
+
   useEffect(() => {
-    if (rehydrated && isAuthenticated) router.replace("/");
-  }, [rehydrated, isAuthenticated, router]);
+    if (rehydrated && isAuthenticated) router.replace(next);
+  }, [rehydrated, isAuthenticated, router, next]);
 
   return (
     <main className="flex min-h-[80vh] items-center justify-center bg-paper px-4 py-12">
       <div className="w-full max-w-[720px] border border-line bg-surface">
-        <AuthForm onSuccess={() => router.replace("/")} />
+        <AuthForm onSuccess={() => router.replace(next)} />
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams needs a Suspense boundary in the app router.
+  return (
+    <Suspense fallback={<div className="min-h-[80vh]" />}>
+      <LoginInner />
+    </Suspense>
   );
 }

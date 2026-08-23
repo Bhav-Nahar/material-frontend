@@ -1,6 +1,7 @@
 // Relative, not "@/lib/...": that alias is a bundler feature, and these two lines are what let
 // collection.test.mjs run under plain `node --test` with no config.
 import { PRODUCT_FIELDS, mapProducts, storefront } from "./products.js";
+import { attachRatings } from "./reviews.js";
 import { SORTS } from "./sorts.js";
 
 /**
@@ -166,16 +167,24 @@ export async function getCollection({
   const sort = SORTS.find((s) => s.value === params.get("sort")) ?? SORTS[0];
   const { filters, unresolved } = readFilters(params);
 
+  // One hour, and throwOnError: a missing collection is a 404, but a Shopify outage must render
+  // error.js as a 5xx rather than 404 every live listing to shoppers and to Googlebot.
   const ask = (applied, facets) =>
-    storefront("getCollection", COLLECTION_QUERY, {
-      handle,
-      first,
-      after: cursor,
-      sortKey: sort.key,
-      reverse: sort.reverse,
-      filters: applied,
-      withFacets: facets,
-    });
+    storefront(
+      "getCollection",
+      COLLECTION_QUERY,
+      {
+        handle,
+        first,
+        after: cursor,
+        sortKey: sort.key,
+        reverse: sort.reverse,
+        filters: applied,
+        withFacets: facets,
+      },
+      3600,
+      { throwOnError: true },
+    );
 
   let data = await ask(filters, withFacets || unresolved.length > 0);
   if (!data?.collection) return null;
@@ -183,7 +192,9 @@ export async function getCollection({
   if (unresolved.length > 0) {
     const named = resolveNamedFilters(unresolved, data.collection.products.filters ?? []);
     if (named.length > 0) {
-      data = (await ask([...filters, ...named], withFacets)) ?? data;
+      // Best-effort refinement: we already hold a renderable page, so a failure on this second
+      // request degrades to the unrefined grid rather than throwing the whole page away.
+      data = (await ask([...filters, ...named], withFacets).catch(() => null)) ?? data;
     }
   }
 
@@ -197,7 +208,7 @@ export async function getCollection({
     image: collection.image ?? null,
     seo: collection.seo ?? null,
     sort: sort.value,
-    products: mapProducts(page.nodes),
+    products: await attachRatings(mapProducts(page.nodes)),
     facets: (page.filters ?? []).map(cleanFacet).filter(Boolean),
     pageInfo: page.pageInfo,
     totalCount: totalFrom(page.filters),

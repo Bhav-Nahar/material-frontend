@@ -19,8 +19,9 @@
  * Both are Numbers, both rounded to paise. Reading a discount is `offer_price - price`, in every
  * event, with no per-event special case.
  *
- * THE CONTAINER SNIPPET IS NOT HERE. `window.dataLayer` is created on first push, so events queue
- * up correctly whenever GTM is added to layout.js later -- that is what dataLayer is for.
+ * THE CONTAINER SNIPPET IS NOT HERE -- it is in app/layout.js, loaded from NEXT_PUBLIC_GTM_ID.
+ * `window.dataLayer` is created on first push, so events fired before the container loads queue up
+ * correctly -- that is what dataLayer is for.
  */
 
 const BRAND = "Material";
@@ -39,14 +40,18 @@ export const pushToDataLayer = (data) => {
 
   if (data.event) {
     const now = Date.now();
-    const lastPush = lastPushedEvents.get(data.event);
+    // pageView dedups on event+path, not event alone: a fast redirect (guarded checkout page →
+    // cart) is two REAL page views inside a second, and keying on the event name swallowed the
+    // second one.
+    const key = data.event === "pageView" ? `pageView:${data.page_path || data.page_location || ""}` : data.event;
+    const lastPush = lastPushedEvents.get(key);
     if (lastPush && now - lastPush < MIN_EVENT_INTERVAL_MS) {
       if (process.env.NODE_ENV === "development") {
         console.warn(`[GTM] rapid repeat of "${data.event}"`);
       }
       if (data.event === "pageView") return;
     }
-    lastPushedEvents.set(data.event, now);
+    lastPushedEvents.set(key, now);
   }
 
   window.dataLayer = window.dataLayer || [];

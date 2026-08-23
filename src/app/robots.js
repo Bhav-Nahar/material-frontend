@@ -30,6 +30,7 @@ export default function robots() {
         '/checkout/', // a cart is one person's, and half of it is client state anyway
         '/login',
         '/api/', // endpoints, not pages
+        '/search', // results are for the searcher; the page also sets noindex
       ],
     },
     sitemap: `${SITE}/sitemap.xml`,

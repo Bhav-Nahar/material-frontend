@@ -30,7 +30,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useHasMounted } from "@/hooks/useHasMounted";
 import { useRehydrated } from "@/hooks/useRehydrated";
 import { checkPincode } from "@/lib/delivery";
-import { GST_RATE } from "@/lib/delivery-charges";
+import { gstBreakdown } from "@/lib/delivery-charges";
 import { addGuestWishlistItem } from "@/redux/features/wishlist/wishlistSlice";
 import { formatPrice } from "@/utils/formatPrice";
 
@@ -55,14 +55,18 @@ export default function CartPage() {
     useSelector((state) => state.cart);
 
   // What the coupon actually took off, as the difference between Shopify's own two figures rather
-  // than a percentage this page would have to know. Guarded because a cart rehydrated from an older
-  // localStorage snapshot has no `subtotal` at all, and `0 - 27668` would print a discount nobody
-  // was given.
-  const saving = subtotal > totalAmount ? subtotal - totalAmount : 0;
+  // than a percentage this page would have to know. Shared with shipping and payment so the three
+  // screens cannot disagree -- see gstBreakdown.
+  const { saving, taxableBase, gstAmount, savingShown } = gstBreakdown(subtotal, totalAmount);
 
   // Shopify's checkout would reject an out-of-stock line anyway; better to say so here than to let
   // someone reach the payment step and bounce.
   const hasUnavailableLine = items.some((item) => item.inStock === false);
+  // A line asking for more than Shopify says exists. Paying for 15 boxes of which 3 are real is an
+  // oversold order and a refund call -- blocked here, where the quantity can still be reduced.
+  const hasShortLine = items.some(
+    (item) => item.inStock !== false && item.stockLeft !== null && item.stockLeft < item.quantity,
+  );
 
   // Shopify quotes tax-inclusive prices on an Indian storefront, so the GST line is extracted from
   // the total, never added to it.
@@ -75,9 +79,6 @@ export default function CartPage() {
     return { serviceable: result.status === "serviceable" };
   })();
 
-  const taxableBase = Math.round((totalAmount / (1 + GST_RATE)) * 100) / 100;
-  const gstAmount = Math.round((totalAmount - taxableBase) * 100) / 100;
-
   // The line the trash icon is asking about. Null when nothing is pending.
   const [pendingRemoval, setPendingRemoval] = useState(null);
 
@@ -89,9 +90,13 @@ export default function CartPage() {
   }, [pendingRemoval]);
 
   // The slice is persisted, but localStorage is a snapshot, not the truth -- the cookie-backed
-  // cart may have expired or been edited in another tab. One GET on mount settles it.
+  // cart may have expired or been edited in another tab. One GET on mount settles it. `settled`
+  // gates the empty state: after a logout (which clears Redux but deliberately not the cookie) the
+  // snapshot is empty while the real cart is a fetch away, and flashing "Your cart is empty" over
+  // a cart that is about to appear reads as a lost basket.
+  const [settled, setSettled] = useState(false);
   useEffect(() => {
-    dispatch(syncCart({}));
+    dispatch(syncCart({})).finally(() => setSettled(true));
   }, [dispatch]);
 
   /**
@@ -129,7 +134,16 @@ export default function CartPage() {
   // The empty cart owns the WHOLE page, heading included -- see EmptyCart. A left-ragged "Your
   // cart" over a centred block is two compositions arguing, and the count beside it is only ever
   // "0" here.
-  if (items.length === 0) return <EmptyCart />;
+  if (items.length === 0) {
+    if (!settled) {
+      return (
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <Loader2 className="size-5 animate-spin text-subtle" />
+        </div>
+      );
+    }
+    return <EmptyCart />;
+  }
 
   return (
     <div className="container-main mt-6 pb-16 max-lg:pb-28 lg:mt-8 lg:pb-24">
@@ -158,6 +172,11 @@ export default function CartPage() {
             role="dialog"
             aria-modal="true"
             aria-label="Remove from cart"
+            tabIndex={-1}
+            // Focus moves INTO the dialog on open -- without this, keyboard and screen-reader
+            // users are left on the (now obscured) trash button and can tab through the page
+            // behind the overlay.
+            ref={(el) => el?.focus()}
           >
             {/* Dismissing is not a third choice, so it is not a third button. An X, the backdrop and
                 Escape all mean "I changed my mind"; the two buttons are the only real decisions. */}
@@ -347,7 +366,14 @@ export default function CartPage() {
                     <span className="flex items-center rounded-sm border border-line">
                       <button
                         type="button"
-                        onClick={() => setQuantity(item.lineId, item.quantity - 1)}
+                        // At quantity 1 the minus is a removal, and removals ask first -- the same
+                        // confirm the trash icon gets. A double-tap on a phone must not silently
+                        // delete a line the calculator built.
+                        onClick={() =>
+                          item.quantity <= 1
+                            ? setPendingRemoval(item)
+                            : setQuantity(item.lineId, item.quantity - 1)
+                        }
                         disabled={loading}
                         aria-label="One fewer"
                         className="flex h-8 w-8 cursor-pointer items-center justify-center text-subtle hover:text-ink disabled:opacity-40"
@@ -457,7 +483,7 @@ export default function CartPage() {
               >
               <button
                 type="button"
-                disabled={!rehydrated || hasUnavailableLine}
+                disabled={!rehydrated || hasUnavailableLine || hasShortLine}
                 onClick={() => {
                   if (!isAuthenticated) return dispatch(openAuthModal({ redirectPath: "/checkout/shipping", source: "cart-checkout" }));
                   // OUR checkout, not Shopify's hosted one. Shopify's collects its own address and
@@ -466,13 +492,20 @@ export default function CartPage() {
                   // reason this store owns the last three steps.
                   router.push("/checkout/shipping");
                 }}
-                className={`flex w-full items-center justify-center gap-2 rounded-sm bg-action py-3.5 text-xs uppercase tracking-wide text-on-action transition-opacity hover:opacity-90 lg:mt-5 ${
-                  rehydrated ? "" : "pointer-events-none opacity-60"
-                }`}
+                className="flex w-full items-center justify-center gap-2 rounded-sm bg-action py-3.5 text-xs uppercase tracking-wide text-on-action transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-60 lg:mt-5"
               >
                 Proceed to checkout
                 <ArrowRight size={15} strokeWidth={1.75} />
               </button>
+              {/* WHY the button is dead, next to the button. The offending line can be a scroll
+                  away, and a full-colour CTA that silently does nothing reads as a broken site. */}
+              {(hasUnavailableLine || hasShortLine) && (
+                <p role="alert" className="mt-2 text-center text-xs text-warn">
+                  {hasUnavailableLine
+                    ? "Remove the out-of-stock item to check out."
+                    : "Reduce the highlighted quantity to what's in stock to check out."}
+                </p>
+              )}
               </StickyCta>
 
               {/* The "secure checkout" line that used to open this list is gone (user, 2026-08-15):

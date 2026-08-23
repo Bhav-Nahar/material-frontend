@@ -110,8 +110,11 @@ export default function AddressesPage() {
       const payload = { ...form };
       delete payload.id; // Shopify rejects an id inside MailingAddressInput
       // "" from an untouched number field is not 0 — send null so the backend records "not asked"
-      // rather than "ground floor", which are priced differently.
-      payload.floor = payload.floor === "" ? null : Number(payload.floor);
+      // rather than "ground floor", which are priced differently. `== null` too: editing an address
+      // whose floor was never answered spreads `floor: null` into the form, and Number(null) is 0 —
+      // a phone-number edit was silently recording "ground floor".
+      payload.floor =
+        payload.floor === "" || payload.floor == null ? null : Number(payload.floor);
 
       if (editing === "new") {
         // First address becomes the default automatically -- nobody wants to add one and then be
@@ -130,6 +133,9 @@ export default function AddressesPage() {
   };
 
   const remove = async (id) => {
+    // ponytail: native confirm, not a styled dialog -- a fat-finger on the trash icon permanently
+    // deletes an address with its floor/lift answers, and one line buys the safety.
+    if (!window.confirm("Delete this address?")) return;
     setBusy(true);
     setError(null);
     try {
@@ -164,7 +170,7 @@ export default function AddressesPage() {
 
   return (
     <div>
-      {error && <p className="mb-4 text-sm text-bad">{error}</p>}
+      {error && <p role="alert" className="mb-4 text-sm text-bad">{error}</p>}
 
       {editing ? (
         <div className="mt-5 max-w-lg border border-line bg-surface p-4 lg:p-5">
@@ -212,7 +218,7 @@ export default function AddressesPage() {
                   id="a-propertyType"
                   value={form.propertyType ?? ""}
                   onChange={(e) => setForm({ ...form, propertyType: e.target.value })}
-                  className="h-9 border border-line-2 bg-surface px-3 text-sm text-ink"
+                  className="h-9 border border-line-strong bg-surface px-3 text-sm text-ink"
                 >
                   {PROPERTY_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>
@@ -246,11 +252,12 @@ export default function AddressesPage() {
                   <button
                     key={option.label}
                     type="button"
+                    aria-pressed={form.liftAvailable === option.value}
                     onClick={() => setForm({ ...form, liftAvailable: option.value })}
                     className={`min-w-[84px] border px-4 py-2 text-sm transition-colors ${
                       form.liftAvailable === option.value
                         ? "border-ink bg-ink text-paper"
-                        : "border-line-2 bg-surface text-subtle hover:text-ink"
+                        : "border-line-strong bg-surface text-subtle hover:text-ink"
                     }`}
                   >
                     {option.label}
@@ -359,7 +366,7 @@ export default function AddressesPage() {
             <button
               type="button"
               onClick={startNew}
-              className="flex h-full min-h-[136px] w-full flex-col items-center justify-center gap-2 border border-dashed border-line-2 bg-paper p-4 text-sm text-subtle transition-colors hover:border-ink hover:text-ink"
+              className="flex h-full min-h-[136px] w-full flex-col items-center justify-center gap-2 border border-dashed border-line-strong bg-paper p-4 text-sm text-subtle transition-colors hover:border-ink hover:text-ink"
             >
               <Plus className="size-5" strokeWidth={1.6} />
               Add an address

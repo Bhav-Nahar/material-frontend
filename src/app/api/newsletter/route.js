@@ -15,6 +15,22 @@ const VERSION = process.env.SHOPIFY_API_VERSION ?? "2026-01";
  * customerCreate there wants a password and makes an account, which is not what this is. The token
  * is server-only and never leaves this file's process.
  */
+// ponytail: in-memory per-IP rate limit -- this route writes SUBSCRIBED customers into the
+// merchant's admin via the Admin API, and without a cap a bot loop floods the customer list and
+// poisons sender reputation. Resets on redeploy and is per-instance; move to a shared store
+// (Upstash) if the site ever runs many instances.
+const hits = new Map(); // ip -> [timestamps]
+const WINDOW_MS = 60 * 60 * 1000;
+const MAX_PER_WINDOW = 5;
+const throttled = (ip) => {
+  const now = Date.now();
+  const recent = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
+  recent.push(now);
+  hits.set(ip, recent);
+  if (hits.size > 10_000) hits.clear(); // memory backstop
+  return recent.length > MAX_PER_WINDOW;
+};
+
 export async function POST(request) {
   const { email } = await request.json().catch(() => ({}));
 
@@ -22,6 +38,11 @@ export async function POST(request) {
   // come from our form.
   if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
     return Response.json({ error: "Enter a valid email address." }, { status: 400 });
+  }
+
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  if (throttled(ip)) {
+    return Response.json({ error: "Too many signups. Try again later." }, { status: 429 });
   }
 
   if (!DOMAIN || !TOKEN) {

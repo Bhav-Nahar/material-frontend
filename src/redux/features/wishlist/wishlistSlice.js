@@ -102,15 +102,18 @@ const wishlistSlice = createSlice({
     },
     addGuestWishlistItem: (state, action) => {
       const item = action.payload;
-      const prodId = getNumericId(item.productId);
-      const varId = getNumericId(item.variantId || "");
-      const key = `${prodId}-${varId}`;
-      
-      const existsInGuest = state.guestItems.some((i) => `${getNumericId(i.productId)}-${getNumericId(i.variantId || "")}` === key);
-      const existsInItems = state.items.some((i) => `${getNumericId(i.productId)}-${getNumericId(i.variantId || "")}` === key);
-      
-      if (!existsInGuest) state.guestItems.unshift(item);
-      if (!existsInItems) state.items.unshift(item);
+      // MATCH ON HANDLE FIRST -- same rule as removeGuestWishlistItem below, for the same reason:
+      // getNumericId takes the trailing digits, so the handles "carrara-matte-600" and
+      // "travertine-beige-600" both collapse to "600" and the second add was silently dropped as a
+      // duplicate of the first. Only gid-shaped ids go through getNumericId.
+      const sameProduct = (a, b) =>
+        a.productHandle && b.productHandle
+          ? a.productHandle === b.productHandle
+          : `${getNumericId(a.productId)}-${getNumericId(a.variantId || "")}` ===
+            `${getNumericId(b.productId)}-${getNumericId(b.variantId || "")}`;
+
+      if (!state.guestItems.some((i) => sameProduct(i, item))) state.guestItems.unshift(item);
+      if (!state.items.some((i) => sameProduct(i, item))) state.items.unshift(item);
     },
     removeGuestWishlistItem: (state, action) => {
       const payload = action.payload;

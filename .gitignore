@@ -18,3 +18,14 @@ public/fonts/*.woff2
 # Verification builds write here so they never clash with a running dev server.
 .next-verify/
 .next-audit/
+
+# One-off Shopify setup/verify scripts -- kept locally, not shipped in the repo
+scripts/create-stress-products.mjs
+scripts/create-single-image-product.mjs
+scripts/setup-india-selling.mjs
+scripts/setup-product-model.mjs
+scripts/verify-cart.mjs
+scripts/verify-coupon.mjs
+scripts/verify-product-model.mjs
+scripts/verify-reviews.mjs
+scripts/verify-review-photos.mjs

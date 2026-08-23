@@ -27,7 +27,9 @@ import { BLOG_HANDLE } from '@/lib/blog';
 
 const SITEMAP_QUERY = `
   query Sitemap($blog: String!) {
-    products(first: 250, query: "published_status:published") {
+    # No query: filter -- "published_status" is an Admin-API-only field; the Storefront API already
+    # returns only what is published to this channel.
+    products(first: 250) {
       nodes { handle updatedAt }
     }
     collections(first: 250) {
@@ -75,10 +77,17 @@ function lastModified(value) {
 }
 
 function entries(nodes, prefix, stamp = 'updatedAt') {
-  return (nodes ?? []).map((node) => ({
-    url: `${SITE}${prefix}/${node.handle}`,
-    lastModified: lastModified(node[stamp]),
-  }));
+  return (
+    (nodes ?? [])
+      // fx-* are the test fixtures scripts/create-test-product.mjs seeds. They are live on the
+      // channel (so the Storefront API returns them) but must not be handed to Google.
+      // ponytail: unpublish them from the Online Store channel and this filter can go.
+      .filter((node) => !node.handle.startsWith('fx-'))
+      .map((node) => ({
+        url: `${SITE}${prefix}/${node.handle}`,
+        lastModified: lastModified(node[stamp]),
+      }))
+  );
 }
 
 export default async function sitemap() {

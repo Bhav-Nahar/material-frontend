@@ -47,10 +47,13 @@ export default async function FaqsPage() {
       </header>
 
       <div className="mx-auto mt-8 max-w-[68ch] space-y-10 lg:mt-12 lg:space-y-14">
-        {sections.map((section) => (
-          <section key={section.heading} aria-labelledby={`faq-${section.heading}`}>
+        {sections.map((section) => {
+          // Headings come from Shopify prose, so they contain spaces -- invalid in an id.
+          const slug = section.heading.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+          return (
+          <section key={section.heading} aria-labelledby={`faq-${slug}`}>
             <h2
-              id={`faq-${section.heading}`}
+              id={`faq-${slug}`}
               className="text-base font-medium text-ink lg:text-lg"
             >
               {section.heading}
@@ -79,7 +82,8 @@ export default async function FaqsPage() {
               />
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
     </main>
   );

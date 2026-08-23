@@ -11,16 +11,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  addressKey,
   createCustomerAddress,
   fetchCustomerAddresses,
   updateCustomerAddress,
 } from "@/lib/api";
+import { checkPincode } from "@/lib/delivery";
 import { gtmCheckout, pushBeginCheckout } from "@/lib/gtm";
 import { openAuthModal } from "@/redux/features/user/userSlice";
 import { syncCart } from "@/redux/features/cart/cartSlice";
 import { useRehydrated } from "@/hooks/useRehydrated";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DELIVERY_OPTIONS, GST_RATE, unloadingCharge } from "@/lib/delivery-charges";
+import { DELIVERY_OPTIONS, gstBreakdown, unloadingCharge } from "@/lib/delivery-charges";
 import StickyCta from "@/components/checkout/StickyCta";
 import { formatPrice } from "@/utils/formatPrice";
 
@@ -110,9 +112,10 @@ export default function ShippingPage() {
   const accessToken = useSelector((state) => state.user.accessToken);
   const user = useSelector((state) => state.user.user);
   const isAuthenticated = useSelector((state) => state.user.isAuthenticated);
-  const { items, totalAmount, totalQuantity, totalWeightKg, appliedCoupon } = useSelector(
+  const { items, totalAmount, totalQuantity, totalWeightKg, appliedCoupon, subtotal } = useSelector(
     (state) => state.cart,
   );
+  const cartLoading = useSelector((state) => state.cart.loading);
 
   // Contact details ride with the order. Prefilled from the account -- the customer already gave us
   // these at signup, and asking again is the friction that makes people abandon a checkout.
@@ -155,7 +158,9 @@ export default function ShippingPage() {
    */
   const beganRef = useRef(false);
   useEffect(() => {
-    if (beganRef.current || !rehydrated || items.length === 0) return;
+    // `cartLoading` is the syncCart GET dispatched above -- the same wait the cart page does. The
+    // rehydrated snapshot alone would report last session's lines.
+    if (beganRef.current || !rehydrated || cartLoading || items.length === 0) return;
     beganRef.current = true;
     pushBeginCheckout(
       gtmCheckout({
@@ -165,13 +170,16 @@ export default function ShippingPage() {
         checkout_step: "shipping",
       }),
     );
-  }, [rehydrated, items, totalAmount, appliedCoupon]);
+  }, [rehydrated, cartLoading, items, totalAmount, appliedCoupon]);
 
   // Checkout requires an account: PPCOD is credit extended on delivery, so an order has to be
   // attached to a verified phone number.
   useEffect(() => {
     if (rehydrated && !isAuthenticated) {
-      dispatch(openAuthModal({ redirectPath: "/checkout/shipping", source: "checkout" }));
+      // "cart-checkout" is the source AuthForm/AuthDialog key on for the stripped one-column
+      // checkout dialog and for skipping the scratch-card game mid-checkout. "checkout" matched
+      // neither, so a deep link here got the full marketing dialog.
+      dispatch(openAuthModal({ redirectPath: "/checkout/shipping", source: "cart-checkout" }));
       router.replace("/checkout/cart");
     }
   }, [rehydrated, isAuthenticated, dispatch, router]);
@@ -237,12 +245,15 @@ export default function ShippingPage() {
     liftAvailable: selectedAddress?.liftAvailable,
   });
 
-  // Shopify prices are GST-INCLUSIVE (an Indian storefront quotes what you pay). So the tax line is
-  // extracted from the total rather than added on top -- adding 18% to a tax-inclusive price would
-  // overcharge every order by 18%.
-  const taxableBase = Math.round((totalAmount / (1 + GST_RATE)) * 100) / 100;
-  const gstAmount = Math.round((totalAmount - taxableBase) * 100) / 100;
+  // Subtotal / GST / Discount, shared with the cart and payment pages so the three screens cannot
+  // disagree -- see gstBreakdown for why GST is extracted from the pre-discount subtotal.
+  const { saving, taxableBase, gstAmount, savingShown } = gstBreakdown(subtotal, totalAmount);
   const payableNow = totalAmount + (unloadingQuote.needsConfirmation ? 0 : unloadingQuote.amount);
+
+  // The store delivers to the MMR. A valid-format pincode outside it passes every form check, so
+  // say so here -- before payment -- rather than refunding a paid order the crew cannot reach.
+  const outsideArea =
+    selectedAddress && checkPincode(selectedAddress.zip).status === "outside";
 
   // One save for both forms. Which one called it only decides where the new id lands -- the address
   // book itself is shared, so an address added as a billing address is there next time either list
@@ -303,13 +314,26 @@ export default function ShippingPage() {
       return setError("A GSTIN is 15 characters, like 27AAAAA0000A1Z5");
     }
 
+    // Only the numeric address keys travel in the URL. The full Shopify address id EMBEDS THE
+    // SESSION'S ACCESS TOKEN (see lib/api.js addressKey), and the contact details are PII -- in a
+    // query string both would land in browser history, server logs and analytics page_location.
+    // The invoice details ride in sessionStorage instead: refresh-safe, and gone with the tab.
+    try {
+      sessionStorage.setItem(
+        "checkout_invoice",
+        JSON.stringify({
+          email: contact.email,
+          phone: contact.phone,
+          ...(gst.wanted ? { gstin: gst.gstin.toUpperCase(), company: gst.company } : {}),
+        }),
+      );
+    } catch {
+      /* storage full/blocked: the payment page falls back to the account email */
+    }
     const query = new URLSearchParams({
-      address: selectedId,
-      billing: billingSame ? selectedId : billingId,
+      address: addressKey(selectedId),
+      billing: addressKey(billingSame ? selectedId : billingId),
       delivery: deliveryOption,
-      email: contact.email,
-      phone: contact.phone,
-      ...(gst.wanted ? { gstin: gst.gstin.toUpperCase(), company: gst.company } : {}),
     });
     router.push(`/checkout/payment?${query}`);
   };
@@ -368,7 +392,7 @@ export default function ShippingPage() {
               <div className="flex flex-col gap-2">
                 <Label htmlFor="c-phone">Phone</Label>
                 <div className="flex items-stretch">
-                  <span className="num flex items-center border border-r-0 border-line-2 bg-paper px-3 text-sm text-subtle">
+                  <span className="num flex items-center border border-r-0 border-line-strong bg-paper px-3 text-sm text-subtle">
                     +91
                   </span>
                   <Input
@@ -493,7 +517,7 @@ export default function ShippingPage() {
                       id="s-propertyType"
                       value={form.propertyType ?? ""}
                       onChange={(e) => setForm({ ...form, propertyType: e.target.value })}
-                      className="h-9 border border-line-2 bg-surface px-3 text-sm text-ink"
+                      className="h-9 border border-line-strong bg-surface px-3 text-sm text-ink"
                     >
                       {PROPERTY_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
@@ -533,7 +557,7 @@ export default function ShippingPage() {
                         className={`min-w-[84px] border px-4 py-2 text-sm transition-colors ${
                           form.liftAvailable === option.value
                             ? "border-ink bg-ink text-paper"
-                            : "border-line-2 bg-surface text-subtle hover:text-ink"
+                            : "border-line-strong bg-surface text-subtle hover:text-ink"
                         }`}
                       >
                         {option.label}
@@ -577,12 +601,25 @@ export default function ShippingPage() {
                 setForm(EMPTY);
                 setAdding(true);
               }}
-              className="mt-4 flex w-full items-center justify-center gap-2 border border-dashed border-line-2 bg-paper py-3.5 text-sm text-subtle transition-colors hover:border-ink hover:text-ink"
+              className="mt-4 flex w-full items-center justify-center gap-2 border border-dashed border-line-strong bg-paper py-3.5 text-sm text-subtle transition-colors hover:border-ink hover:text-ink"
             >
               <Plus size={16} strokeWidth={1.6} />
               Add another address
             </button>
           )}
+          {/* Outside the MMR: not a block -- the store may still quote it by hand -- but the
+              customer must hear it BEFORE paying, not from a refund email. */}
+          {outsideArea && (
+            <p className="mt-3 flex items-start gap-2 text-xs text-warn">
+              <Truck size={14} strokeWidth={1.6} className="mt-px shrink-0" />
+              <span>
+                PIN <span className="num">{selectedAddress.zip}</span> is outside our usual delivery
+                area (Mumbai &amp; MMR). You can still order — our team will call to confirm delivery
+                before dispatch.
+              </span>
+            </p>
+          )}
+
           {/* ===================== BILLING ===================== */}
           {/* Ticked by default, because it is true for nearly every order and an unticked box here
               would make every customer fill an address twice. Unticking picks from the SAME address
@@ -624,7 +661,7 @@ export default function ShippingPage() {
                       id="billing-address"
                       value={billingId ?? ""}
                       onChange={(e) => setBillingId(e.target.value || null)}
-                      className="h-9 border border-line-2 bg-surface px-3 text-sm text-ink"
+                      className="h-9 border border-line-strong bg-surface px-3 text-sm text-ink"
                     >
                       <option value="">Select an address</option>
                       {addresses.map((address) => (
@@ -659,7 +696,7 @@ export default function ShippingPage() {
                   <button
                     type="button"
                     onClick={() => setBillingAdding(true)}
-                    className="flex w-full items-center justify-center gap-2 border border-dashed border-line-2 bg-paper py-3 text-sm text-subtle transition-colors hover:border-ink hover:text-ink"
+                    className="flex w-full items-center justify-center gap-2 border border-dashed border-line-strong bg-paper py-3 text-sm text-subtle transition-colors hover:border-ink hover:text-ink"
                   >
                     <Plus size={16} strokeWidth={1.6} />
                     Use a different address
@@ -809,6 +846,14 @@ export default function ShippingPage() {
                 <dt>GST (18%)</dt>
                 <dd>₹{formatPrice(gstAmount)}</dd>
               </div>
+              {/* The coupon the customer applied one screen ago must not vanish from the
+                  itemization here -- a discount that disappears reads as a discount revoked. */}
+              {saving > 0 && (
+                <div className="flex items-baseline justify-between text-good">
+                  <dt>Discount{appliedCoupon?.code ? ` · ${appliedCoupon.code}` : ""}</dt>
+                  <dd>−₹{formatPrice(savingShown)}</dd>
+                </div>
+              )}
               <div className="flex items-baseline justify-between text-subtle">
                 <dt>
                   {DELIVERY_OPTIONS[deliveryOption].label} delivery

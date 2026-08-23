@@ -32,7 +32,7 @@ export default async function CategoryProducts({ handle, title, first = 24 }) {
   const looks =
     menu
       .find((m) => m.href === `/collections/${handle}`)
-      ?.columns.find((c) => /look|pattern/i.test(c.title))
+      ?.columns?.find((c) => /look|pattern/i.test(c.title))
       ?.items.map((i) => i.label) ?? [];
 
   // Only looks that actually have stock behind them. GlassQuick shows every chip whether or not it

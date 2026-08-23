@@ -1,14 +1,16 @@
 // Relative rather than the "@/" alias so this module, and collection.js above it, load under plain
 // `node --test` without a bundler.
 import { PLACEHOLDER_PRODUCTS } from "../data/products.js";
+import { attachRatings } from "./reviews.js";
 
 /**
  * Server-side product reads, straight from Shopify.
  *
- * Deliberately NOT src/lib/shopify-client.js: that one reads NEXT_PUBLIC_* names (so it can run in
- * the browser) and none of them are set. These are the server-only names that ARE set in
- * .env.local, so the token never reaches the client, and the fetch is cached with the page's own
- * revalidate window instead of forcing the homepage to render dynamically on every request.
+ * These are the server-only env names set in .env.local, so the token never reaches the client,
+ * and the fetch is cached with the page's own revalidate window instead of forcing the homepage to
+ * render dynamically on every request. (A browser-side client reading NEXT_PUBLIC_* token names
+ * used to live in lib/shopify-client.js -- deleted; a NEXT_PUBLIC_ Storefront token ships the
+ * token to every visitor and must not come back.)
  */
 const DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
 const TOKEN = process.env.SHOPIFY_STOREFRONT_TOKEN;
@@ -63,14 +65,6 @@ export const PRODUCT_FIELDS = `
         images(first: 5) { nodes { url } }
 `;
 
-const TOP_SELLING = `
-  query TopSelling($first: Int!) {
-    products(first: $first, sortKey: BEST_SELLING) {
-      nodes { ${PRODUCT_FIELDS} }
-    }
-  }
-`;
-
 const COLLECTION_PRODUCTS = `
   query CollectionProducts($handle: String!, $first: Int!) {
     collection(handle: $handle) {
@@ -80,18 +74,6 @@ const COLLECTION_PRODUCTS = `
     }
   }
 `;
-
-/**
- * Best sellers, as Shopify ranks them. Returns [] on any failure -- a homepage section is not worth
- * a 500, and the caller renders nothing when the list is empty.
- *
- * ponytail: no retry, no client-side cache layer. `revalidate` already means one request a day.
- */
-export async function getTopSelling(first = 6) {
-  const nodes = await storefront("getTopSelling", TOP_SELLING, { first });
-  const products = mapProducts(nodes?.products?.nodes);
-  return products.length > 0 ? products : devFallback();
-}
 
 /**
  * Best sellers within one collection, for the per-category homepage sections. Returns [] when the
@@ -109,7 +91,11 @@ export async function getCollectionProducts(handle, first = 24) {
   // so in DEVELOPMENT a thin result is topped up from the placeholders rather than replaced -- the
   // real product still shows, first. devFallback returns [] in production, so this is just
   // `products` there and nothing invented can ship.
-  return products.length >= MIN_SHELF ? products : [...products, ...devFallback(handle)];
+  // Ratings AFTER the top-up, so the placeholders go through the same path and simply come back
+  // with rating: null rather than being a second shape the card has to handle.
+  return attachRatings(
+    products.length >= MIN_SHELF ? products : [...products, ...devFallback(handle)],
+  );
 }
 
 /**
@@ -139,7 +125,10 @@ export async function predictiveSearch(term, limit = 6) {
   if (!found) return null;
 
   return {
-    products: mapProducts(found.products),
+    // Ratings here too, because /search renders full ProductCards off this and a card with no stars
+    // beside the same product that has them on the shelf reads as a data bug. The ratings fetch is
+    // cached separately (1h) from this one (5m), so the header dropdown pays for it once an hour.
+    products: await attachRatings(mapProducts(found.products)),
     collections: found.collections ?? [],
     articles: found.articles ?? [],
     pages: found.pages ?? [],
@@ -165,17 +154,29 @@ const PREDICTIVE_SEARCH = `
 `;
 
 /**
- * One POST to the Storefront API. Returns null on any failure -- a homepage section is not worth a
- * 500, and every caller falls back to the placeholders or to nothing.
+ * One POST to the Storefront API. Returns null on any failure by default -- a homepage section is
+ * not worth a 500, and those callers fall back to the placeholders or to nothing.
+ *
+ * `throwOnError` is for the PDP and the PLP, where the difference between "Shopify said this
+ * product does not exist" (data.product === null → a real 404) and "Shopify was down/throttled"
+ * (→ throw, so error.js renders a 5xx) is the difference between a missing page and Google
+ * deindexing live products during an outage.
  *
  * ponytail: no retry, no client-side cache layer. `revalidate` already means one request a day for
  * the shelves; search passes a shorter window.
  */
-export async function storefront(label, query, variables, revalidate = 86400) {
-  if (!DOMAIN || !TOKEN) return null;
+export async function storefront(label, query, variables, revalidate = 86400, { throwOnError = false } = {}) {
+  const fail = (message) => {
+    console.warn(`[${label}] ${message}`);
+    if (throwOnError) throw new Error(`[${label}] ${message}`);
+    return null;
+  };
 
+  if (!DOMAIN || !TOKEN) return fail("SHOPIFY_STORE_DOMAIN / SHOPIFY_STOREFRONT_TOKEN not set");
+
+  let res;
   try {
-    const res = await fetch(`https://${DOMAIN}/api/${VERSION}/graphql.json`, {
+    res = await fetch(`https://${DOMAIN}/api/${VERSION}/graphql.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -184,23 +185,16 @@ export async function storefront(label, query, variables, revalidate = 86400) {
       body: JSON.stringify({ query, variables }),
       next: { revalidate },
     });
-
-    if (!res.ok) {
-      console.warn(`[${label}] Shopify returned ${res.status}`);
-      return null;
-    }
-
-    const { data, errors } = await res.json();
-    if (errors?.length) {
-      console.warn(`[${label}]`, errors[0].message);
-      return null;
-    }
-
-    return data;
   } catch (err) {
-    console.warn(`[${label}] request failed:`, err.message);
-    return null;
+    return fail(`request failed: ${err.message}`);
   }
+
+  if (!res.ok) return fail(`Shopify returned ${res.status}`);
+
+  const { data, errors } = await res.json();
+  if (errors?.length) return fail(errors[0].message);
+
+  return data;
 }
 
 export function mapProducts(nodes) {
@@ -244,9 +238,9 @@ export function mapProducts(nodes) {
        * display-only; deriving it the other way round rounds paise off what is actually charged.
        */
       const packPrice = Number(v?.price?.amount ?? p.priceRange?.minVariantPrice?.amount ?? 0);
-      const packCompare = Number(
-        v?.compareAtPrice?.amount ?? p.compareAtPriceRange?.minVariantPrice?.amount ?? 0,
-      );
+      // THIS variant's compare-at or nothing. Falling back to compareAtPriceRange borrowed another
+      // variant's MRP and struck it against the cheapest variant's price -- a fabricated discount.
+      const packCompare = Number(v?.compareAtPrice?.amount ?? 0);
       const coverage = Number(v?.unitPriceMeasurement?.quantityValue ?? 0);
       const perSqFtPrice = Number(v?.unitPrice?.amount ?? 0);
       // Both must be present: without coverage there is no honest compare-at per sq ft either.
@@ -269,6 +263,9 @@ export function mapProducts(nodes) {
         unit: perSqFt ? "sq ft" : null,
         // Only worth showing beside a per-sq-ft price; on its own it IS the price.
         packPrice: perSqFt ? packPrice : 0,
+        // Shopify's compare-at, UNDIVIDED. The struck price is shown against the pack price it
+        // actually belongs to, so the card needs the box figure and not the per-sq-ft one.
+        packCompare: perSqFt ? packCompare : 0,
         packUnit: v?.packUnit?.value || "box",
         images,
         tags: p.tags ?? [],

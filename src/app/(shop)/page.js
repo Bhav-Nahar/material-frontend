@@ -16,20 +16,23 @@ export const revalidate = 86400;
 export default function Home() {
   return (
     <main>
+      {/* The page's one h1, for the heading tree and the index — every section below starts at h2,
+          and the hero is a photograph. sr-only: the banner IS the visual headline. */}
+      <h1 className="sr-only">Material — tiles, laminates and wallpaper in Mumbai</h1>
       <CategoryRail />
       <HeroBanner slides={BANNER_SLIDES} />
       <WhyMaterial />
       {/* One category for now. Laminates and wallpaper are one more line each once their
-          collections exist -- TopSelling.jsx is the old mixed shelf this replaced, still on disk. */}
+          collections exist. */}
       <CategoryProducts handle="tiles" />
       <ShopByCategory />
       <ShopByRoom />
       {/* The banner splits the two product shelves, so it never sits flush against the dark footer
           -- two charcoal blocks running together stop reading as a break at all. */}
       <HelpMeChoose />
-      {/* PLACEHOLDER SOURCE: there is no new-arrivals collection yet, so this is the tiles
-          collection under a different heading. Point it at the real handle once it exists. */}
-      <CategoryProducts handle="tiles" title="New arrivals" />
+      {/* "New arrivals" is gone until a real new-arrivals collection exists: it rendered the SAME
+          24 tiles as the shelf above under a contradictory heading, which teaches shoppers the
+          labels lie. One line to bring back: <CategoryProducts handle="new-arrivals" title="New arrivals" /> */}
       {/* Last, and the only centred section: the page alternates product shelf / browse block, and
           this is the browse block that ends it. */}
       <TrendingCollections />
