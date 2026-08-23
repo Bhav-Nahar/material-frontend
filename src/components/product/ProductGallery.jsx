@@ -3,15 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, Heart, Share2 } from "lucide-react";
-import { Swiper, SwiperSlide } from "swiper/react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   LightingBar,
   LightingTrigger,
   LightingWash,
 } from "@/components/product/LightingPreview";
-
-import "swiper/css";
 
 /**
  * The PDP gallery, following the jewelry build's arrangement:
@@ -39,7 +36,7 @@ const HEADER = 168;
  * per row, so a ten-image product built a 1552px column beside a 670px buy box -- 882px, 57% of the
  * right-hand column, blank paper (user, 2026-08-21). Four keeps the mosaic two rows tall, which is
  * about the height of the buy box, and the rest are one click away in the lightbox that already
- * exists. Mobile is untouched: the Swiper there costs no vertical space per extra image.
+ * exists. Mobile is untouched: the rail there costs no vertical space per extra image.
  */
 const MOSAIC_MAX = 4;
 
@@ -64,7 +61,7 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
    * The lighting preview: whether the bar is open, and the temperature it is set to.
    *
    * Held HERE rather than in the bar because the temperature has to reach four places that render
-   * the same photographs -- the desktop mosaic, the mobile swiper, the thumbnail strip and the
+   * the same photographs -- the desktop mosaic, the mobile rail, the thumbnail strip and the
    * lightbox. A shopper who warms the swatch and then opens it full-screen to look closer is doing
    * exactly the thing the feature exists for; the lightbox snapping back to neutral would throw
    * the comparison away at the moment it matters most.
@@ -83,8 +80,12 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
 
 
 
-  const swiperRef = useRef(null);
+  const railRef = useRef(null);
   const gridRef = useRef(null);
+
+  /* The lightbox's dialog content, once mounted. The lighting bar portals into it while the zoom
+     is open so Radix's scroll lock does not eat the slider's drag -- see the portal in LightingBar. */
+  const [lightboxEl, setLightboxEl] = useState(null);
   const [stickyTop, setStickyTop] = useState(HEADER);
 
   /**
@@ -137,7 +138,7 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
   const solo = images.length === 1;
 
   /**
-   * ONE sizes string per image, shared by the desktop mosaic and the mobile swiper below.
+   * ONE sizes string per image, shared by the desktop mosaic and the mobile rail below.
    *
    * They must agree or the hidden-but-rendered copy costs a second download of the same photograph
    * -- the bug the original comment here was written about. A lone spanning image really is ~60vw
@@ -154,7 +155,19 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
   const goto = (i) => {
     const next = (i + images.length) % images.length;
     setIndex(next);
-    swiperRef.current?.slideTo(next);
+    const rail = railRef.current;
+    if (rail) rail.scrollTo({ left: next * rail.clientWidth, behavior: "smooth" });
+  };
+
+  /**
+   * Which slide the rail has settled on. Read off scrollLeft rather than tracked with an observer:
+   * one division against a full-width slide is exact, and setState only fires when the answer
+   * changes, so a flick costs one re-render rather than one per frame.
+   */
+  const onRailScroll = (e) => {
+    const el = e.currentTarget;
+    const next = Math.round(el.scrollLeft / el.clientWidth);
+    if (next !== index && next >= 0 && next < images.length) setIndex(next);
   };
 
   return (
@@ -236,14 +249,27 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
           Full-bleed: the container's gutter is cancelled so the photograph runs edge to edge. */}
       <div className="lg:hidden">
         <div className="relative mx-[calc(clamp(1rem,3vw,2.5rem)*-1)]">
-          <Swiper
-            slidesPerView={1}
-            onSwiper={(s) => (swiperRef.current = s)}
-            onSlideChange={(s) => setIndex(s.activeIndex)}
-            className="aspect-swatch w-full"
+          {/*
+            NATIVE scroll-snap, not Swiper. Every slide is filled by a <button> so the photograph
+            can be tapped open, and Swiper deliberately skips its own touchstart preventDefault on
+            form elements -- so the browser read every drag as a press on that button and the
+            gallery could only be moved with the thumbnail rail (user, 2026-08-23). Forcing
+            Swiper's hand with touchStartForcePreventDefault also suppresses the synthesised tap
+            that opens the lightbox, which trades one broken gesture for the other.
+
+            A one-per-view image carousel is what overflow-x plus snap-mandatory already is: the
+            drag is the browser's own, so it is smooth and interruptible for free, the tap still
+            fires because a scrolled gesture cancels the click by itself, and the JS left is one
+            division in onRailScroll. Swiper stays where it earns its keep -- ProductRail's
+            free-mode multi-slide rails.
+          */}
+          <div
+            ref={railRef}
+            onScroll={onRailScroll}
+            className="no-scrollbar aspect-swatch flex w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
           >
             {images.map((img, i) => (
-              <SwiperSlide key={img.url}>
+              <div key={img.url} className="w-full shrink-0 snap-center">
                 <button
                   type="button"
                   onClick={() => show(i)}
@@ -260,13 +286,13 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
                   />
                   {/* Only the slide ON SCREEN is washed. The blend is cheap, but eight of them is
                       eight composited layers for seven photographs nobody is looking at. The
-                      Swiper's onSlideChange re-renders with the new index, so the incoming slide is
-                      tinted before it finishes moving in. */}
+                      onRailScroll re-renders with the new index, so the incoming slide is tinted
+                      before it finishes moving in. */}
                   {i === index && <LightingWash active={lightingOpen} />}
                 </button>
-              </SwiperSlide>
+              </div>
             ))}
-          </Swiper>
+          </div>
 
           {tag && <Tag>{tag}</Tag>}
           <Controls
@@ -289,8 +315,8 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
           )}
         </div>
 
-        {/* Thumbnail strip, theirs. A scroll rail of buttons driving the Swiper above rather than
-            a second Swiper with the Thumbs module: same behaviour, one instance. */}
+        {/* Thumbnail strip, theirs. Buttons that scroll the rail above, rather than a second
+            Swiper with the Thumbs module: same behaviour, no carousel library at all. */}
         {images.length > 1 && (
           <ul className="no-scrollbar mt-3 flex gap-2 overflow-x-auto">
             {images.map((img, i) => (
@@ -322,7 +348,12 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
         )}
       </div>
 
-      {lightingOpen && <LightingBar onClose={() => setLightingOpen(false)} />}
+      {lightingOpen && (
+        <LightingBar
+          onClose={() => setLightingOpen(false)}
+          container={open ? lightboxEl : null}
+        />
+      )}
 
       <Lightbox
         open={open}
@@ -333,6 +364,7 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
         title={title}
         lightingOn={lightingOpen}
         onToggleLighting={() => setLightingOpen((v) => !v)}
+        contentRef={setLightboxEl}
       />
     </>
   );
@@ -354,6 +386,7 @@ function Lightbox({
   title,
   lightingOn,
   onToggleLighting,
+  contentRef,
 }) {
   const [zoom, setZoom] = useState(null); // {x, y} as percentages, or null for fit
 
@@ -399,6 +432,7 @@ function Lightbox({
       {/* text-white is for the Dialog's own close button, which otherwise inherits charcoal ink
           and disappears against the scrim. */}
       <DialogContent
+        ref={contentRef}
         aria-describedby={undefined}
         /*
           The lighting bar is a body-level portal, so as far as Radix is concerned a click on it is

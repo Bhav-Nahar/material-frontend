@@ -171,7 +171,7 @@ export function LightingTrigger({ active, onClick, className = "" }) {
  * Which is also why the readout shares a line with the title and the Kelvin ticks are gone: every
  * row removed is a row of photograph kept.
  */
-function LightingBar({ onClose }) {
+function LightingBar({ onClose, container = null }) {
   /*
     The temperature lives HERE, not in the gallery, so a drag re-renders this card and nothing else.
     The photographs are updated by writing the CSS variable straight to <html> -- see WASH_VAR.
@@ -330,8 +330,22 @@ function LightingBar({ onClose }) {
     </div>
   );
 
-  // Only ever called from a click, so `document` exists; the guard is for safety, not SSR.
-  return typeof document === "undefined" ? card : createPortal(card, document.body);
+  /*
+    Portalled onto <body> normally, but INTO the lightbox's own dialog content while the zoom is
+    open, which is not cosmetic: Radix's scroll lock (react-remove-scroll) cancels touchmove for
+    every target outside the dialog, so a body-level bar accepted a tap and ignored a DRAG -- the
+    slider could be jumped but not slid, on the one screen people zoom in to judge colour on
+    (user, 2026-08-23). Inside the content it is on the allowed side of the lock.
+
+    Only the portal TARGET moves. `kelvin` is this component's own state, held outside the portalled
+    tree, so opening the zoom mid-drag carries the temperature across rather than snapping back to
+    neutral -- and any wash mounting into the new tree is born the right colour from `currentWash`.
+
+    The card stays `position: fixed`: the lightbox's content box is the whole viewport, so its
+    transform-induced containing block puts the bar exactly where <body> did.
+  */
+  if (typeof document === "undefined") return card;
+  return createPortal(card, container ?? document.body);
 }
 
 export { LightingBar };
