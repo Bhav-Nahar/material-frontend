@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import Image from "next/image";
 import {
@@ -32,12 +32,14 @@ import StickyCta from "@/components/checkout/StickyCta";
 import { syncCart } from "@/redux/features/cart/cartSlice";
 import { useRehydrated } from "@/hooks/useRehydrated";
 import { formatPrice } from "@/utils/formatPrice";
+import { CheckoutSkeleton } from "@/components/ui/skeleton";
 
 const RAZORPAY_SDK = "https://checkout.razorpay.com/v1/checkout.js";
 
-// The invoice details the shipping step collected. In sessionStorage rather than the query string:
-// email, phone and GSTIN in a URL land in browser history, server logs and analytics
-// page_location. Refresh-safe, and gone with the tab.
+// Everything the shipping step collected. In sessionStorage rather than the query string: email,
+// phone, GSTIN and the address keys in a URL land in browser history, server logs and analytics
+// page_location. Refresh-safe, and gone with the tab -- an empty read means the customer never
+// completed the shipping step in this tab, and the effect below sends them back to it.
 const readInvoice = () => {
   try {
     return JSON.parse(sessionStorage.getItem("checkout_invoice") || "{}") || {};
@@ -46,19 +48,18 @@ const readInvoice = () => {
   }
 };
 
-function PaymentInner() {
+export default function PaymentPage() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const params = useSearchParams();
   const rehydrated = useRehydrated();
 
-  const addressId = params.get("address");
-  // Absent on a link from an older tab; the server falls back to the delivery address, which is what
-  // "same as delivery" means anyway.
-  const billingAddressId = params.get("billing");
-  const deliveryOption = params.get("delivery") === "doorstep" ? "doorstep" : "ground";
   // Lazy initializer so sessionStorage is only touched on the client -- this page is prerendered.
   const [invoice] = useState(() => (typeof window === "undefined" ? {} : readInvoice()));
+  const addressId = invoice.address || null;
+  // Absent on an older handoff; the server falls back to the delivery address, which is what
+  // "same as delivery" means anyway.
+  const billingAddressId = invoice.billing || null;
+  const deliveryOption = invoice.delivery === "doorstep" ? "doorstep" : "ground";
   const invoiceEmail = invoice.email || "";
   const contactPhone = invoice.phone || "";
   const gstin = invoice.gstin || "";
@@ -396,9 +397,7 @@ function PaymentInner() {
 
   if (!rehydrated) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
-      </div>
+      <CheckoutSkeleton rows={2} />
     );
   }
 
@@ -752,20 +751,5 @@ function PaymentInner() {
         </div>
       )}
     </div>
-  );
-}
-
-export default function PaymentPage() {
-  // useSearchParams needs a Suspense boundary in the app router.
-  return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <Loader2 className="size-5 animate-spin text-subtle" />
-        </div>
-      }
-    >
-      <PaymentInner />
-    </Suspense>
   );
 }

@@ -144,7 +144,7 @@ export default function ProductCard({ product, priority = false, list = "", inde
     // real click overwrites, so it is not worth stopping.
     // `data-plp-handle` is what the listing page scrolls back to on return -- see lib/plpScroll.
     <div ref={impressionRef} data-plp-handle={product.handle} onClick={onCardClick}>
-      <div className="group/card relative aspect-swatch overflow-hidden rounded-sm border border-line bg-paper">
+      <div className="group/card media-bed relative aspect-swatch overflow-hidden rounded-sm border border-line">
         {/* More than one image: a swipeable gallery, their arrangement -- a hairline progress bar
             along the bottom edge on touch, arrows that fade in on hover from 1024px up. One image:
             no slider at all, so a single-photo card carries no Swiper instance. `nested` tells the

@@ -25,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DELIVERY_OPTIONS, gstBreakdown, unloadingCharge } from "@/lib/delivery-charges";
 import StickyCta from "@/components/checkout/StickyCta";
 import { formatPrice } from "@/utils/formatPrice";
+import { CheckoutSkeleton } from "@/components/ui/skeleton";
 
 const PROPERTY_TYPES = [
   { value: "apartment", label: "Apartment" },
@@ -76,7 +77,10 @@ function AddressFields({ idPrefix, form, setForm }) {
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
       {FIELDS.map(({ key, label, half, numeric, max }) => (
         <div key={key} className={`flex flex-col gap-2 ${half ? "" : "sm:col-span-2"}`}>
-          <Label htmlFor={`${idPrefix}-${key}`}>{label}</Label>
+          <Label htmlFor={`${idPrefix}-${key}`}>
+            {label}
+            {key !== "address2" && <span className="text-red-600"> *</span>}
+          </Label>
           <Input
             id={`${idPrefix}-${key}`}
             className={numeric ? "num" : ""}
@@ -206,8 +210,10 @@ export default function ShippingPage() {
       setSelectedId((current) => (stillThere(current) ? current : fallback));
       setBillingId((current) => (stillThere(current) ? current : null));
       setAdding(list.length === 0);
+      return list;
     } catch (err) {
       setError(err?.message || "Could not load your addresses");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -268,6 +274,12 @@ export default function ShippingPage() {
     if (!draft.city.trim()) return setError("Please enter the city");
     if (!/^\d{6}$/.test(String(draft.zip))) return setError("PIN code must be 6 digits");
     if (!/^[6-9]\d{9}$/.test(String(draft.phone))) return setError("Enter a valid 10-digit phone");
+    // Delivery only -- the billing form has no floor/lift fields, and nobody carries tile to an
+    // accountant's office. These two price the carry, so an unanswered one is a wrong quote.
+    if (!billing) {
+      if (draft.floor === "" || draft.floor === null) return setError("Enter the floor, 0 for ground");
+      if (draft.liftAvailable === null) return setError("Tell us if there is a working lift");
+    }
 
     setBusy(true);
     try {
@@ -290,8 +302,12 @@ export default function ShippingPage() {
         setForm(EMPTY);
         setAdding(false);
       }
-      await load();
-      const id = created?.address?.id;
+      const list = await load();
+      // Match on addressKey, not the raw id: the id returned by the save call carries a different
+      // token than the ones in the refreshed list, so selecting it directly matches no radio and
+      // the customer has to pick the address they just typed.
+      const key = addressKey(created?.address?.id);
+      const id = list.find((a) => addressKey(a.id) === key)?.id || created?.address?.id;
       if (id) {
         (billing ? setBillingId : setSelectedId)(id);
         // Shopify mints a new id on update, so anything else pointing at the old one is now
@@ -314,35 +330,31 @@ export default function ShippingPage() {
       return setError("A GSTIN is 15 characters, like 27AAAAA0000A1Z5");
     }
 
-    // Only the numeric address keys travel in the URL. The full Shopify address id EMBEDS THE
-    // SESSION'S ACCESS TOKEN (see lib/api.js addressKey), and the contact details are PII -- in a
-    // query string both would land in browser history, server logs and analytics page_location.
-    // The invoice details ride in sessionStorage instead: refresh-safe, and gone with the tab.
+    // NOTHING travels in the URL. The full Shopify address id EMBEDS THE SESSION'S ACCESS TOKEN
+    // (see lib/api.js addressKey) and the contact details are PII; even the numeric address keys
+    // in a query string land in browser history, server logs and analytics page_location. The
+    // whole handoff rides in sessionStorage: refresh-safe, and gone with the tab.
     try {
       sessionStorage.setItem(
         "checkout_invoice",
         JSON.stringify({
           email: contact.email,
           phone: contact.phone,
+          address: addressKey(selectedId),
+          billing: addressKey(billingSame ? selectedId : billingId),
+          delivery: deliveryOption,
           ...(gst.wanted ? { gstin: gst.gstin.toUpperCase(), company: gst.company } : {}),
         }),
       );
     } catch {
-      /* storage full/blocked: the payment page falls back to the account email */
+      /* storage full/blocked: the payment page sends them back to pick the address again */
     }
-    const query = new URLSearchParams({
-      address: addressKey(selectedId),
-      billing: addressKey(billingSame ? selectedId : billingId),
-      delivery: deliveryOption,
-    });
-    router.push(`/checkout/payment?${query}`);
+    router.push("/checkout/payment");
   };
 
   if (!rehydrated || loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
-      </div>
+      <CheckoutSkeleton rows={3} />
     );
   }
 
@@ -380,7 +392,7 @@ export default function ShippingPage() {
             <h2 className="text-sm font-medium text-ink">Contact</h2>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="c-email">Email</Label>
+                <Label htmlFor="c-email">Email<span className="text-red-600"> *</span></Label>
                 <Input
                   id="c-email"
                   type="email"
@@ -390,7 +402,7 @@ export default function ShippingPage() {
                 <p className="text-xs text-meta">Your invoice and order updates.</p>
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="c-phone">Phone</Label>
+                <Label htmlFor="c-phone">Phone<span className="text-red-600"> *</span></Label>
                 <div className="flex items-stretch">
                   <span className="num flex items-center border border-r-0 border-line-strong bg-paper px-3 text-sm text-subtle">
                     +91
@@ -512,7 +524,7 @@ export default function ShippingPage() {
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="s-propertyType">Property type</Label>
+                    <Label htmlFor="s-propertyType">Property type<span className="text-red-600"> *</span></Label>
                     <select
                       id="s-propertyType"
                       value={form.propertyType ?? ""}
@@ -528,7 +540,7 @@ export default function ShippingPage() {
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="s-floor">Floor</Label>
+                    <Label htmlFor="s-floor">Floor<span className="text-red-600"> *</span></Label>
                     <Input
                       id="s-floor"
                       className="num"
@@ -544,7 +556,7 @@ export default function ShippingPage() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2">
-                  <span className="text-sm text-ink">Is there a working lift?</span>
+                  <span className="text-sm text-ink">Is there a working lift?<span className="text-red-600"> *</span></span>
                   <div className="flex gap-2">
                     {[
                       { value: true, label: "Yes" },

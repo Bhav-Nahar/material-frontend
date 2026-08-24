@@ -18,7 +18,7 @@ function SlideBody({ slide, index }) {
     <Link prefetch={false} href={slide.url || "/"} className="block w-full">
       <div className="relative w-full">
         {/* Desktop Image */}
-        <div className="relative hidden aspect-hero w-full lg:block">
+        <div className="media-bed relative hidden aspect-hero w-full lg:block">
           <Image
             loader={shopifyLoader}
             src={slide.desktopImage}
@@ -33,7 +33,7 @@ function SlideBody({ slide, index }) {
         </div>
 
         {/* Mobile Image */}
-        <div className="relative block aspect-hero-mobile w-full lg:hidden">
+        <div className="media-bed relative block aspect-hero-mobile w-full lg:hidden">
           <Image
             loader={shopifyLoader}
             src={slide.mobileImage || slide.desktopImage}

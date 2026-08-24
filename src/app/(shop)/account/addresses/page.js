@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { Loader2, Plus, Star, Trash2 } from "lucide-react";
 
+import { RowsSkeleton } from "@/components/ui/skeleton";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -162,9 +164,7 @@ export default function AddressesPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
-      </div>
+      <RowsSkeleton count={2} height="h-36" />
     );
   }
 

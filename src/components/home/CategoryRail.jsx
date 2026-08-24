@@ -28,7 +28,7 @@ export default function CategoryRail() {
               prefetch={false}
               className="flex flex-col gap-2 active:opacity-70"
             >
-              <span className="relative block aspect-swatch overflow-hidden rounded-sm bg-surface">
+              <span className="media-bed relative block aspect-swatch overflow-hidden rounded-sm">
                 <Image
                   src={category.image}
                   alt=""

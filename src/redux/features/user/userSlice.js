@@ -68,19 +68,23 @@ const userSlice = createSlice({
       state.authMode = (isObject && payload.mode) || "login";
       state.authSource = (isObject && payload.source) || null;
     },
+    /**
+     * ONLY the open flag is cleared. mode / source / redirectPath are left ALONE on purpose.
+     *
+     * Radix keeps the dialog mounted through its exit animation, so anything reset here is still
+     * being rendered for another 160ms. Nulling `authSource` made the wishlist dialog re-render
+     * mid-fade as the DEFAULT dialog -- 380px wide and 380 tall becomes 720 wide and 695 tall --
+     * so it visibly ballooned on its way out instead of settling.
+     *
+     * Nothing reads these while the modal is shut, and openAuthModal sets all three every time it
+     * opens, so keeping the last values costs nothing and there is no stale read to have.
+     */
     closeAuthModal: (state) => {
       state.isAuthModalOpen = false;
-      state.authRedirectPath = null;
-      state.authMode = "login";
-      state.authSource = null;
     },
+    // Same reasoning as closeAuthModal: closing must not change what is still on screen.
     toggleAuthModal: (state) => {
       state.isAuthModalOpen = !state.isAuthModalOpen;
-      if (!state.isAuthModalOpen) {
-        state.authRedirectPath = null;
-        state.authMode = "login";
-      state.authSource = null;
-      }
     },
     setReferralLoading: (state, action) => {
       state.referralLoading = action.payload;

@@ -204,6 +204,24 @@
 
   img, video { display: block; max-width: 100%; }
 
+  /* IN-PAGE ANCHORS GLIDE, they do not teleport.
+
+     The PDP's rating pill and "Write a review" are `href="#reviews"`, and the section is five
+     screens down -- a native jump lands there with no sense of having travelled, so it reads as the
+     page having replaced itself rather than scrolled. The targets already carry `scroll-mt-*` to
+     clear the sticky header; this is the other half.
+
+     Safe to put on `html` under the App Router: Next forces `scroll-behavior: auto` around its own
+     navigation scrolls, so page-to-page transitions still snap to the top instantly instead of
+     animating down the whole document.
+
+     Behind prefers-reduced-motion, because a long smooth scroll is exactly the kind of movement
+     that triggers motion sickness -- and that is also the one case where the instant jump is
+     correct rather than lazy. */
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+
   /* §10 — 2px orange focus ring at 2px offset */
   :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 
@@ -217,9 +235,64 @@
    to the viewport edge before this existed. */
 @utility container-main {
   width: 100%;
-  max-width: 1440px;
   margin-inline: auto;
   padding-inline: clamp(1rem, 3vw, 2.5rem);
+
+  /* A 1440px column centred on a 2560px monitor is a ribbon between two deserts, and a hard
+     `@media (min-width: 1920px)` step just moves the problem to a different width and adds a
+     visible jump at the breakpoint. clamp() instead: the shell holds 1440 until the viewport is
+     big enough that 92vw exceeds it (~1565px), then grows with the screen, and stops at 2240 --
+     past that even a four-column grid starts spreading out. The card grids gain a fourth column at
+     2xl (below), so the extra width becomes MORE PRODUCTS rather than bigger pictures.
+
+     Everything inside is fluid (grids, clamp gutters) and prose blocks carry their own max-w-3xl,
+     so no component needs to know this happened. */
+  max-width: clamp(1440px, 92vw, 2240px);
+}
+
+/* IMAGE BEDS.
+
+   Every image box on the site already reserves its space with an aspect ratio, so nothing shifts
+   -- but on a slow connection those boxes are blank white until the bytes land, and a homepage of
+   white rectangles reads as a page that failed. This tints them and pulses, so the wait looks like
+   loading rather than breakage. The image paints on top and covers it; nothing to switch off, no
+   onLoad state, no JS.
+
+   Applied to the WRAPPER, never the <img>. */
+@utility media-bed {
+  background-color: var(--line);
+  animation: media-bed-pulse 1.6s ease-in-out infinite;
+}
+
+/* The bed is decoration; someone who asked the OS to stop animations gets a flat tint. */
+@media (prefers-reduced-motion: reduce) {
+  .media-bed { animation: none; }
+}
+
+@keyframes media-bed-pulse {
+  0%, 100% { background-color: var(--line); }
+  50% { background-color: var(--line-2); }
+}
+
+/* THE PRODUCT GRID, as one utility rather than a chain of breakpoint variants.
+
+   Both `min-[1800px]:grid-cols-4` and a registered `3xl:` breakpoint LOSE to `lg:grid-cols-3`:
+   Tailwind v4 sorts wide variants earlier in the stylesheet, so at equal specificity the lg rule
+   comes later and wins, and the fourth column never appeared at any width. Declaring the whole
+   ladder in one place ends the argument -- and it puts "how many products per row" in a single
+   spot instead of spread across four className strings that have to agree.
+
+   2 up to lg, 3 to 1800, 4 beyond -- so a wide monitor buys MORE PRODUCTS, not bigger pictures. */
+@utility grid-products {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  @media (min-width: 1800px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* Scroll rails page by gesture; the scrollbar is noise. The jewelry build has this rule

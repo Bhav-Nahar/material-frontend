@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Check, Loader2 } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,8 +69,15 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
+      // The form that is coming: four label+field pairs and a button.
+      <div className="mt-5 max-w-lg animate-pulse space-y-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i}>
+            <Skeleton className="h-3 w-24 opacity-60" />
+            <Skeleton className="mt-2 h-9 w-full opacity-60" />
+          </div>
+        ))}
+        <Skeleton className="h-10 w-36" />
       </div>
     );
   }

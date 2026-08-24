@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import Stars from "./Stars";
 import ReviewForm from "./ReviewForm";
 import ReviewList from "./ReviewList";
+import { jumpTo } from "@/utils/jumpTo";
 
 /**
  * The reviews section, under the promises strip.
@@ -192,6 +193,7 @@ function CustomerPhotos({ reviews }) {
           // an image.
           <a
             href="#reviews"
+            onClick={jumpTo("reviews")}
             className="num flex h-20 w-20 items-center justify-center rounded-sm border border-line bg-surface text-sm font-medium text-subtle transition-colors hover:border-line-strong"
           >
             +{hidden}

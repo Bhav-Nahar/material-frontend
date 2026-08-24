@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSelector } from "react-redux";
-import { ArrowRight, Check, Copy, Loader2 } from "lucide-react";
+import { ArrowRight, Check, Copy } from "lucide-react";
+
+import { RowsSkeleton } from "@/components/ui/skeleton";
 
 import { fetchCustomerCoupons } from "@/lib/api";
 import { formatPrice } from "@/utils/formatPrice";
@@ -52,9 +54,7 @@ export default function CouponsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
-      </div>
+      <RowsSkeleton count={3} height="h-24" />
     );
   }
 
