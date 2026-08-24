@@ -2,13 +2,13 @@
 
 import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight, Heart, Share2 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Heart, Share2 } from "lucide-react";
 import {
   LightingBar,
   LightingTrigger,
   LightingWash,
 } from "@/components/product/LightingPreview";
+import GalleryLightbox from "@/components/product/GalleryLightbox";
 
 /**
  * The PDP gallery, following the jewelry build's arrangement:
@@ -39,19 +39,6 @@ const HEADER = 168;
  * exists. Mobile is untouched: the rail there costs no vertical space per extra image.
  */
 const MOSAIC_MAX = 4;
-
-/**
- * Breathing room around the zoomed photograph. Vertical is the generous one -- it is the axis a
- * landscape monitor is short of, and the axis the close button and counter sit on.
- */
-const LIGHTBOX_INSET_X = "clamp(0.5rem, 3vw, 4rem)";
-const LIGHTBOX_INSET_Y = "clamp(1rem, 7vh, 5rem)";
-
-/**
- * Room kept at the bottom for the lighting bar when it is open, so the photograph sits clear of it
- * rather than under it. Its own height (~116px) plus its bottom offset and a gutter.
- */
-const LIGHTBOX_BAR_SPACE = "9rem";
 
 export default function ProductGallery({ images, title, tag, wishlisted, onWishlist, onShare }) {
   const [index, setIndex] = useState(0);
@@ -370,292 +357,21 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
         />
       )}
 
-      <Lightbox
+      <GalleryLightbox
         open={open}
-        onOpenChange={setOpen}
+        onClose={() => setOpen(false)}
         images={images}
         index={index}
         onIndex={goto}
         title={title}
         lightingOn={lightingOpen}
         onToggleLighting={() => setLightingOpen((v) => !v)}
-        contentRef={setLightboxEl}
+        onContainer={setLightboxEl}
       />
     </>
   );
 }
 
-/* -------------------------------------------------------------------------- lightbox */
-
-/**
- * Radix's Dialog does the focus trap, the Esc key and the scroll lock, so this is the picture, two
- * arrows and one zoom transform. The jewelry build hand-rolls all of it, including a body-overflow
- * effect that leaks `overflow: unset` onto <body> when the component unmounts mid-transition.
- */
-function Lightbox({
-  open,
-  onOpenChange,
-  images,
-  index,
-  onIndex,
-  title,
-  lightingOn,
-  onToggleLighting,
-  contentRef,
-}) {
-  const [zoom, setZoom] = useState(null); // {x, y} as percentages, or null for fit
-  const railRef = useRef(null);
-  /* Whether the rail has been positioned once for this opening. The first alignment must not
-     animate -- opening image 5 and watching it scroll there from image 1 is a reveal of the
-     plumbing. Every alignment after that is a navigation and should glide. */
-  const aligned = useRef(false);
-  /* Set when the index changed BECAUSE the rail scrolled, so the alignment below stands down. This
-     is the difference between smooth and nearly-smooth: a flick crosses the halfway point while
-     momentum is still running, which updates the index, which would fire a scrollTo straight into
-     the browser's own deceleration -- two animations fighting over one scroll offset. */
-  const fromScroll = useRef(false);
-
-  // Any change of picture drops the zoom -- otherwise the next image opens scrolled to a corner
-  // of the last one.
-  useEffect(() => setZoom(null), [index, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "ArrowRight") onIndex(index + 1);
-      if (e.key === "ArrowLeft") onIndex(index - 1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, index, onIndex]);
-
-
-  // One transform, shared by the photograph and the wash over it.
-  const zoomStyle = {
-    transform: zoom ? "scale(2.5)" : "scale(1)",
-    transformOrigin: zoom ? `${zoom.x}% ${zoom.y}%` : "center",
-  };
-
-  // Click to zoom to the point clicked, click again to fit. Two states, no drag, no pinch: the
-  // photography is 1200px wide, so anything past ~2.5x is showing the customer the compression.
-  const toggleZoom = (e) => {
-    if (zoom) return setZoom(null);
-    const box = e.currentTarget.getBoundingClientRect();
-    setZoom({
-      x: ((e.clientX - box.left) / box.width) * 100,
-      y: ((e.clientY - box.top) / box.height) * 100,
-    });
-  };
-
-  /**
-   * Which picture the rail has settled on, and the other direction: keeping the rail in step when
-   * the arrows, the keyboard or the page's own thumbnails move the index.
-   *
-   * The guard is the reason both can coexist without a loop -- a scroll that lands where the index
-   * already points writes nothing, and an alignment that is already correct scrolls nowhere.
-   */
-  const onRailScroll = (e) => {
-    const el = e.currentTarget;
-    const next = Math.round(el.scrollLeft / el.clientWidth);
-    if (next !== index && next >= 0 && next < images.length) {
-      // The ref is set OUTSIDE the transition, synchronously. The alignment effect below reads it
-      // to know this index change came from the finger, and a ref written inside a deferred
-      // callback would still be false if that effect ran first -- the alignment would then fire a
-      // scrollTo into the browser's own momentum, which is the exact fight the ref exists to stop.
-      fromScroll.current = true;
-      // Deferred for the same reason as the page rail's -- and it matters more here, because
-      // `onIndex` lives in the parent, so an urgent update re-renders the whole gallery AND this
-      // lightbox, and trips the `setZoom(null)` effect on the way through. Three renders' worth of
-      // work, synchronously, in the middle of a swipe.
-      startTransition(() => onIndex(next));
-    }
-  };
-
-  useEffect(() => {
-    if (!open) aligned.current = false;
-  }, [open]);
-
-  useEffect(() => {
-    const el = railRef.current;
-    if (!el) return;
-    // The finger is already doing this one. Snapping is the browser's job from here.
-    if (fromScroll.current) {
-      fromScroll.current = false;
-      aligned.current = true;
-      return;
-    }
-    const target = index * el.clientWidth;
-    if (Math.abs(el.scrollLeft - target) > 4) {
-      el.scrollTo({ left: target, behavior: aligned.current ? "smooth" : "instant" });
-    }
-    aligned.current = true;
-  }, [index, open]);
-
-  // Below every hook, so an empty gallery cannot change the hook order between renders.
-  if (!images[index]) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* text-white is for the Dialog's own close button, which otherwise inherits charcoal ink
-          and disappears against the scrim. */}
-      <DialogContent
-        ref={contentRef}
-        aria-describedby={undefined}
-        /*
-          The lighting bar is a body-level portal, so as far as Radix is concerned a click on it is
-          a click OUTSIDE the dialog -- which would shut the zoom the moment you reached for the
-          slider. Both handlers are needed: pointer-down fires first on a drag, interact-outside
-          also covers focus and touch.
-        */
-        onPointerDownOutside={(e) => {
-          if (e.target.closest?.("[data-lighting-bar]")) e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          if (e.target.closest?.("[data-lighting-bar]")) e.preventDefault();
-        }}
-        className="h-dvh w-screen max-w-none gap-0 rounded-none border-0 bg-ink/95 p-0 text-white sm:max-w-none"
-      >
-        <DialogTitle className="sr-only">{title}</DialogTitle>
-
-        <div className="relative h-full w-full">
-          {/*
-            The SAME native scroll-snap rail as the page gallery, for the same reason plus one: a
-            threshold-and-jump swipe was measured here first and read as cheap -- the photograph
-            teleported instead of following the finger (user, 2026-08-23). Native scrolling follows
-            it, decelerates and can be caught mid-flick, none of which is worth hand-rolling.
-
-            It works inside a Radix dialog because react-remove-scroll locks the BODY and permits
-            scrolling within the dialog content -- the same lock that eats the lighting slider's
-            drag out on <body>, which is why that bar portals in here while this is open.
-
-            Zoomed, the rail stops being a rail: overflow and snapping both go off, so a drag across
-            a 2.5x photograph cannot slide the next one in underneath it.
-          */}
-          <div
-            ref={railRef}
-            onScroll={onRailScroll}
-            className="no-scrollbar flex h-full w-full overscroll-x-contain"
-            style={{
-              overflowX: zoom ? "hidden" : "auto",
-              overflowY: "hidden",
-              scrollSnapType: zoom ? "none" : "x mandatory",
-            }}
-          >
-            {images.map((img, i) => {
-              const r = (img.width || 1) / (img.height || 1);
-              const current = i === index;
-              return (
-                /* The padding is what moves the photograph UP when the bar is open; the height
-                   budget below is reduced by the same amount so it shrinks to fit rather than
-                   overflowing. Per slide, so every photograph clears the bar and not just this one. */
-                <div
-                  key={img.url}
-                  className="flex h-full w-full shrink-0 snap-center items-center justify-center"
-                  style={{ paddingBottom: lightingOn ? LIGHTBOX_BAR_SPACE : undefined }}
-                >
-                  {/*
-                    The box SHRINK-WRAPS the photograph rather than filling the slide, and that is a
-                    correctness requirement, not tidiness: `LightingWash` needs `isolate` to blend,
-                    and inside an isolated group anything the image does not cover gets painted the
-                    flat wash colour -- a full-bleed box turned the dark scrim solid cream, and solid
-                    WHITE at neutral, taking the white close button with it.
-
-                    Sized in VIEWPORT units, which is honest because this dialog IS the viewport
-                    (`h-dvh w-screen`, no padding): take all the width available unless the height
-                    runs out first. Two earlier attempts failed -- the image's natural size opened a
-                    450px Shopify variant inside a 900px dialog, and `aspect-ratio` with `max-h-full`
-                    simply did not clamp as a flex item, sending a square to 1440x1440 in 1440x900.
-
-                    The insets stop a square filling the screen edge to edge on desktop, which read
-                    as a broken page rather than an opened image. Asymmetric on purpose: vertical is
-                    the axis a landscape monitor is short of, and where the close button and counter
-                    live. `clamp` keeps a phone from giving away width it does not have.
-                  */}
-                  <div
-                    /* Only the picture on screen answers a tap, so a tap that lands mid-flick on a
-                       neighbour cannot zoom a photograph the shopper is not looking at. A scrolled
-                       gesture cancels its own click, which is what leaves tap-to-zoom working next
-                       to a drag without a single threshold to tune. */
-                    onClick={current ? toggleZoom : undefined}
-                    className={`relative isolate ${zoom ? "cursor-zoom-out" : "cursor-zoom-in"}`}
-                    style={{
-                      aspectRatio: r,
-                      width: `min(
-                        calc(100vw - 2 * ${LIGHTBOX_INSET_X}),
-                        calc((100dvh - 2 * ${LIGHTBOX_INSET_Y} - ${
-                          lightingOn ? LIGHTBOX_BAR_SPACE : "0px"
-                        }) * ${r})
-                      )`,
-                    }}
-                  >
-                    <Image
-                      src={img.url}
-                      alt={img.altText || (current ? title : "")}
-                      fill
-                      sizes="100vw"
-                      priority={current}
-                      // `contain` inside a box that already has the image's ratio means no letterbox
-                      // is left inside the box -- the box IS the picture, which is why the wash can
-                      // simply cover it.
-                      className="object-contain transition-transform duration-300"
-                      style={current ? zoomStyle : undefined}
-                    />
-                    {/* Same transform as the image, so the tint zooms with it rather than sitting
-                        still. Every slide carries one: a wash mounting mid-swipe is born the right
-                        colour from `currentWash`, so the incoming photograph is already tinted. */}
-                    <LightingWash active={lightingOn} style={current ? zoomStyle : undefined} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Judging a colour is what people zoom in FOR, so the control has to be reachable from
-              here and not only from the page behind. The bar itself is shared, not duplicated --
-              this only opens it. */}
-          <LightingTrigger
-            active={lightingOn}
-            onClick={onToggleLighting}
-            className="absolute left-4 top-4 z-20 shadow-sm"
-          />
-
-          {images.length > 1 && (
-            <>
-              <ArrowButton side="left" onClick={() => onIndex(index - 1)} />
-              <ArrowButton side="right" onClick={() => onIndex(index + 1)} />
-              {/* Moves to the TOP while the bar is open. Nudging it up the bottom edge was tried
-                  and there is no offset that clears the bar on a phone and still looks deliberate
-                  on desktop -- the top edge is simply free, between the trigger and the close. */}
-              <span
-                className={`num absolute left-1/2 z-20 -translate-x-1/2 rounded-sm bg-surface/80 px-2.5 py-1 text-xs text-ink ${
-                  lightingOn ? "top-4" : "bottom-5"
-                }`}
-              >
-                {index + 1}/{images.length}
-              </span>
-            </>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ArrowButton({ side, onClick }) {
-  const Icon = side === "left" ? ChevronLeft : ChevronRight;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={side === "left" ? "Previous image" : "Next image"}
-      className={`absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-sm bg-surface/80 text-ink transition-colors hover:bg-surface ${
-        side === "left" ? "left-3 lg:left-6" : "right-3 lg:right-6"
-      }`}
-    >
-      <Icon size={20} strokeWidth={1.5} />
-    </button>
-  );
-}
 
 /* -------------------------------------------------------------------------- pieces */
 
