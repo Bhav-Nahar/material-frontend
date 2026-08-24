@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSelector } from "react-redux";
-import { ArrowRight, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
+
+import { RowsSkeleton } from "@/components/ui/skeleton";
 
 import { fetchCustomerOrders } from "@/lib/api";
 import { formatPrice } from "@/utils/formatPrice";
@@ -51,9 +53,7 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
-      </div>
+      <RowsSkeleton count={3} height="h-28" />
     );
   }
 

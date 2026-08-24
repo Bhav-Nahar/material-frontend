@@ -6,6 +6,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { ArrowRight, Lock, ShoppingCart, Star, Wallet } from "lucide-react";
 
 import ProductGallery from "@/components/product/ProductGallery";
+import { jumpTo } from "@/utils/jumpTo";
 import BuySheet from "@/components/product/BuySheet";
 import PincodeCheck from "@/components/product/PincodeCheck";
 import ProductHelp from "@/components/product/ProductHelp";
@@ -128,6 +129,22 @@ export default function ProductPage({ product, reviews }) {
     let raf = 0;
     const check = () => {
       raf = 0;
+
+      // BELOW lg THERE IS NO INLINE ADD BUTTON -- the block ctaRef watches is `hidden lg:block`, so
+      // on a phone this bar is the only Add control there is. Watching that ref here would read a
+      // display:none rect of all zeros, `bottom < 0` would never be true, and the bar would never
+      // arrive at all.
+      //
+      // So the phone asks a different question: has the shopper touched the page yet? The bar parks
+      // for the untouched first fold, where its 69px strip sits exactly on top of the rating pill,
+      // and comes back on the first scroll -- which is the same gesture that would have moved the
+      // pill out from under it anyway. Nothing is lost: the CTA is one flick away and returns for
+      // the whole rest of the page.
+      if (window.innerWidth < 1024) {
+        setBarShown(window.scrollY > 40);
+        return;
+      }
+
       const el = ctaRef.current;
       if (!el) return;
       setBarShown(el.getBoundingClientRect().bottom < 0);
@@ -136,9 +153,12 @@ export default function ProductPage({ product, reviews }) {
       if (!raf) raf = requestAnimationFrame(check);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    // Crossing lg swaps which question above is being asked, and a resize fires no scroll event.
+    window.addEventListener("resize", onScroll, { passive: true });
     check();
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
       cancelAnimationFrame(raf);
     };
   }, []);
@@ -384,6 +404,7 @@ export default function ProductPage({ product, reviews }) {
                   of number it is. ProductCard does the same, so the two never disagree. */}
               <a
                 href="#reviews"
+                onClick={jumpTo("reviews")}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-line bg-surface px-2.5 py-1 transition-colors hover:border-line-strong"
               >
                 <span className="num text-sm font-semibold leading-none text-ink">
@@ -403,6 +424,7 @@ export default function ProductPage({ product, reviews }) {
 
               <a
                 href="#reviews"
+                onClick={jumpTo("reviews")}
                 className="text-xs text-action-ink underline-offset-4 hover:underline"
               >
                 Write a review
@@ -616,13 +638,21 @@ export default function ProductPage({ product, reviews }) {
 
           It SLIDES rather than appearing, which it has to now that it lands on top of the nav: an
           instant swap between two different full-width white bars in the same 48px of screen reads
-          as a flicker, not a change. `lg:hidden` cannot be part of that -- display:none has nothing
-          to transition -- so the hidden state is a translate off the top edge, with pointer-events
-          off so the parked bar cannot take a click meant for the nav underneath it. Below lg none of
-          this applies: the bar is pinned to the bottom for the whole page and never transforms. */}
+          as a flicker, not a change. `hidden` cannot be part of that -- display:none has nothing to
+          transition -- so the parked state is a translate off the nearest edge (DOWN on a phone,
+          UP on desktop) with pointer-events off.
+
+          IT PARKS ON A PHONE TOO (user, 2026-08-24). It used to be pinned to the bottom for the
+          whole page, and that 69px strip sits exactly where the rating pill lands at scroll 0 on a
+          taller phone -- so the first tap on "4.5 | 2 reviews" hit the buy bar instead, and the
+          shopper had to scroll and tap again. pointer-events-none alone would not fix it: an
+          invisible bar still covering the pill is worse, because nothing on screen explains the
+          dead tap. Parking it off-edge until the inline Add button scrolls away gives the first
+          fold back to the content, and `barShown` is the same signal desktop already uses -- so
+          both sizes now answer "is the real Add button still on screen?" the same way. */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-line bg-surface px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:top-0 lg:bottom-auto lg:z-110 lg:gap-8 lg:border-b lg:border-t-0 lg:px-10 lg:pb-3 lg:transition-transform lg:duration-300 ${
-          barShown ? "" : "lg:pointer-events-none lg:-translate-y-full"
+        className={`fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-line bg-surface px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] transition-transform duration-300 lg:top-0 lg:bottom-auto lg:z-110 lg:gap-8 lg:border-b lg:border-t-0 lg:px-10 lg:pb-3 ${
+          barShown ? "" : "pointer-events-none translate-y-full lg:-translate-y-full"
         }`}
       >
         <p className="hidden min-w-0 flex-1 truncate text-sm text-ink lg:block">

@@ -8,6 +8,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { useRehydrated } from "@/hooks/useRehydrated";
 import { ACCOUNT_SECTIONS } from "./nav";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * The customer account area.
@@ -47,9 +48,23 @@ export default function AccountLayout({ children }) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [rehydrated, isAuthenticated, router, pathname]);
 
-  // Nothing until we know. A flash of the account shell followed by a bounce to /login reads as a
-  // bug even when the outcome is correct.
-  if (!rehydrated || !isAuthenticated) return <div className="min-h-[60vh]" />;
+  // A SKELETON until we know, not a blank 60vh hole -- rehydration plus the section's own fetch is
+  // long enough on a slow connection to read as a broken page. Deliberately generic: the shell is
+  // the same on every account screen, and guessing the section's shape here would mean guessing
+  // wrong on five of the six. Still no account CHROME (no nav, no heading): a flash of the real
+  // shell followed by a bounce to /login reads as a bug even when the outcome is correct.
+  if (!rehydrated || !isAuthenticated) {
+    return (
+      <main className="container-main mt-4 min-h-[60vh] animate-pulse pb-16 lg:mt-8">
+        <Skeleton className="h-7 w-44" />
+        <div className="mt-6 space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full opacity-60" />
+          ))}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="container-main mt-4 pb-16 lg:mt-8 lg:pb-24">

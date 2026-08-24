@@ -441,7 +441,7 @@ export default function CollectionPage({
           ) : (
             <div
               ref={grid}
-              className={`grid grid-cols-2 gap-x-4 gap-y-8 transition-opacity lg:grid-cols-3 lg:gap-x-6 ${
+              className={`grid-products gap-x-4 gap-y-8 transition-opacity lg:gap-x-6 ${
                 pending ? "opacity-50" : ""
               }`}
             >

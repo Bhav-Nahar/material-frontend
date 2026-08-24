@@ -23,6 +23,21 @@ import ProductPage from "./ProductPage";
  */
 export const revalidate = 86400;
 
+/**
+ * Pre-render the 50 best sellers at build time. Without this every PDP view is a function
+ * invocation; with it the pages people actually visit are ISR-cached HTML served off the CDN.
+ * Handles outside this list still render on demand (dynamicParams defaults to true) and are
+ * cached from their first hit.
+ */
+export async function generateStaticParams() {
+  const { storefront } = await import("@/lib/products");
+  const data = await storefront(
+    "topProductHandles",
+    `query TopProducts { products(first: 50, sortKey: BEST_SELLING) { nodes { handle } } }`,
+  );
+  return (data?.products?.nodes || []).map(({ handle }) => ({ handle }));
+}
+
 export async function generateMetadata({ params }) {
   const { handle } = await params;
   const product = await getProduct(handle);

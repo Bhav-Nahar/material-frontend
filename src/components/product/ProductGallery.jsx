@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, Heart, Share2 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -46,17 +46,6 @@ const MOSAIC_MAX = 4;
  */
 const LIGHTBOX_INSET_X = "clamp(0.5rem, 3vw, 4rem)";
 const LIGHTBOX_INSET_Y = "clamp(1rem, 7vh, 5rem)";
-
-/**
- * Swipe thresholds in the lightbox, in CSS pixels of horizontal travel.
- *
- * SWIPE_MIN is what counts as "next picture" -- low enough that a flick across a phone registers,
- * high enough that the wobble in a tap on a moving train does not. TAP_MAX is the opposite end:
- * past it the gesture was a drag that fell short, and zooming on it would be the wrong answer to
- * a movement the shopper meant as a swipe.
- */
-const SWIPE_MIN = 45;
-const TAP_MAX = 12;
 
 /**
  * Room kept at the bottom for the lighting bar when it is open, so the photograph sits clear of it
@@ -174,11 +163,26 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
    * Which slide the rail has settled on. Read off scrollLeft rather than tracked with an observer:
    * one division against a full-width slide is exact, and setState only fires when the answer
    * changes, so a flick costs one re-render rather than one per frame.
+   *
+   * THE RE-RENDER IS A TRANSITION (user, 2026-08-24), which is what makes the swipe smooth. One
+   * re-render per slide is cheap to say and expensive to do: it re-renders every slide in the rail,
+   * and as an urgent update React does that synchronously inside the scroll handler, blocking the
+   * frame. Measured on a 6x-throttled phone, dragging across three slides: worst frame 94ms with
+   * this update urgent, 20ms with the handler removed entirely -- a visible hitch each time the
+   * finger crosses into the next photograph, which is the whole of "the gallery does not scroll
+   * smoothly".
+   *
+   * startTransition marks it interruptible, so React yields to the scroll and paints the new index
+   * in the gaps instead of ahead of the frame. Nothing here needs to be synchronous: the index
+   * drives a counter, the thumbnail highlight and the lighting wash, and none of the three has to
+   * land in the same frame as the pixels moving under the finger.
    */
   const onRailScroll = (e) => {
     const el = e.currentTarget;
     const next = Math.round(el.scrollLeft / el.clientWidth);
-    if (next !== index && next >= 0 && next < images.length) setIndex(next);
+    if (next !== index && next >= 0 && next < images.length) {
+      startTransition(() => setIndex(next));
+    }
   };
 
   return (
@@ -400,10 +404,16 @@ function Lightbox({
   contentRef,
 }) {
   const [zoom, setZoom] = useState(null); // {x, y} as percentages, or null for fit
-  /* Where a pointer went down, for the swipe measurement below. A ref, not state: nothing renders
-     from it, and re-rendering the zoomed photograph on every touchstart is the one thing this view
-     cannot afford. Must sit above the `!image` early return to stay a legal hook call. */
-  const down = useRef(null);
+  const railRef = useRef(null);
+  /* Whether the rail has been positioned once for this opening. The first alignment must not
+     animate -- opening image 5 and watching it scroll there from image 1 is a reveal of the
+     plumbing. Every alignment after that is a navigation and should glide. */
+  const aligned = useRef(false);
+  /* Set when the index changed BECAUSE the rail scrolled, so the alignment below stands down. This
+     is the difference between smooth and nearly-smooth: a flick crosses the halfway point while
+     momentum is still running, which updates the index, which would fire a scrollTo straight into
+     the browser's own deceleration -- two animations fighting over one scroll offset. */
+  const fromScroll = useRef(false);
 
   // Any change of picture drops the zoom -- otherwise the next image opens scrolled to a corner
   // of the last one.
@@ -419,11 +429,6 @@ function Lightbox({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, index, onIndex]);
 
-  const image = images[index];
-  if (!image) return null;
-
-  // The photograph's aspect ratio as a bare number, for the sizing below.
-  const ratio = (image.width || 1) / (image.height || 1);
 
   // One transform, shared by the photograph and the wash over it.
   const zoomStyle = {
@@ -443,40 +448,51 @@ function Lightbox({
   };
 
   /**
-   * Swipe to change picture, because arrows in the corners of a full-screen photograph are a
-   * desktop control: on a phone this view is the gallery, and the gesture everyone tries first is
-   * a drag (user, 2026-08-23). Radix's scroll lock rules out reusing the page's scroll-snap rail
-   * here, so the gesture is measured from raw pointer events -- which covers mouse-drag on desktop
-   * for free.
+   * Which picture the rail has settled on, and the other direction: keeping the rail in step when
+   * the arrows, the keyboard or the page's own thumbnails move the index.
    *
-   * ponytail: one axis, one threshold, no velocity and no rubber-banding follow-the-finger. The
-   * photograph jumps to the next one rather than sliding under the finger; add the transform if
-   * that reads as cheap on a real phone.
+   * The guard is the reason both can coexist without a loop -- a scroll that lands where the index
+   * already points writes nothing, and an alignment that is already correct scrolls nowhere.
    */
-  const onPointerDown = (e) => {
-    down.current = { x: e.clientX, y: e.clientY };
+  const onRailScroll = (e) => {
+    const el = e.currentTarget;
+    const next = Math.round(el.scrollLeft / el.clientWidth);
+    if (next !== index && next >= 0 && next < images.length) {
+      // The ref is set OUTSIDE the transition, synchronously. The alignment effect below reads it
+      // to know this index change came from the finger, and a ref written inside a deferred
+      // callback would still be false if that effect ran first -- the alignment would then fire a
+      // scrollTo into the browser's own momentum, which is the exact fight the ref exists to stop.
+      fromScroll.current = true;
+      // Deferred for the same reason as the page rail's -- and it matters more here, because
+      // `onIndex` lives in the parent, so an urgent update re-renders the whole gallery AND this
+      // lightbox, and trips the `setZoom(null)` effect on the way through. Three renders' worth of
+      // work, synchronously, in the middle of a swipe.
+      startTransition(() => onIndex(next));
+    }
   };
 
-  const onPointerUp = (e) => {
-    const start = down.current;
-    down.current = null;
-    if (!start) return;
+  useEffect(() => {
+    if (!open) aligned.current = false;
+  }, [open]);
 
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-
-    // Horizontal, past the threshold, and more horizontal than vertical -- otherwise a scroll
-    // attempt or a slightly sloppy tap would count as a swipe. Never while zoomed: there the
-    // gesture belongs to the zoom, and a tap out is the way back.
-    if (!zoom && Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy)) {
-      onIndex(index + (dx < 0 ? 1 : -1));
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    // The finger is already doing this one. Snapping is the browser's job from here.
+    if (fromScroll.current) {
+      fromScroll.current = false;
+      aligned.current = true;
       return;
     }
+    const target = index * el.clientWidth;
+    if (Math.abs(el.scrollLeft - target) > 4) {
+      el.scrollTo({ left: target, behavior: aligned.current ? "smooth" : "instant" });
+    }
+    aligned.current = true;
+  }, [index, open]);
 
-    // Anything shorter is a tap, and taps zoom. Reusing the pointer event keeps the zoom origin
-    // exactly where the finger landed.
-    if (Math.abs(dx) < TAP_MAX && Math.abs(dy) < TAP_MAX) toggleZoom(e);
-  };
+  // Below every hook, so an empty gallery cannot change the hook order between renders.
+  if (!images[index]) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -501,69 +517,97 @@ function Lightbox({
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
 
-        {/* The padding is what moves the photograph UP when the bar is open; the height budget
-            below is reduced by the same amount so it shrinks to fit rather than overflowing. */}
-        <div
-          className="relative flex h-full w-full items-center justify-center"
-          style={{ paddingBottom: lightingOn ? LIGHTBOX_BAR_SPACE : undefined }}
-        >
+        <div className="relative h-full w-full">
           {/*
-            The wrapper SHRINK-WRAPS the photograph rather than filling the dialog, and that is a
-            correctness requirement, not tidiness. `LightingWash` needs `isolate` to blend with the
-            image, and inside an isolated group anything the image does not cover gets painted the
-            flat wash colour -- so a full-bleed wrapper turned the dark scrim solid cream, and solid
-            WHITE at neutral, taking the white close button with it.
+            The SAME native scroll-snap rail as the page gallery, for the same reason plus one: a
+            threshold-and-jump swipe was measured here first and read as cheap -- the photograph
+            teleported instead of following the finger (user, 2026-08-23). Native scrolling follows
+            it, decelerates and can be caught mid-flick, none of which is worth hand-rolling.
 
-            `inline-flex` plus `max-h-full max-w-full` on both wrapper and image gives a box exactly
-            the size of the letterboxed photograph, so the wash lands only on pixels.
+            It works inside a Radix dialog because react-remove-scroll locks the BODY and permits
+            scrolling within the dialog content -- the same lock that eats the lighting slider's
+            drag out on <body>, which is why that bar portals in here while this is open.
+
+            Zoomed, the rail stops being a rail: overflow and snapping both go off, so a drag across
+            a 2.5x photograph cannot slide the next one in underneath it.
           */}
           <div
-            onPointerDown={onPointerDown}
-            onPointerUp={onPointerUp}
-            /*
-              The box is exactly the letterboxed photograph, which is what the wash needs to avoid
-              painting the scrim (see LightingWash). Getting there took three tries:
-
-                - the image's own natural size: Shopify serves a 450px variant of a 600px original,
-                  so the zoom opened at 450px inside a 900px dialog -- smaller than the thumbnail
-                  that opened it;
-                - `aspect-ratio` with `max-h-full`: as a flex item the max-height simply did not
-                  clamp, and a square went 1440x1440 inside a 1440x900 dialog.
-
-              So it is sized in VIEWPORT units, which is honest here because this dialog IS the
-              viewport (`h-dvh w-screen`, no padding): take all the width available, unless the
-              height runs out first. `dvh` so a phone's collapsing address bar does not crop it.
-
-              The two insets are what stop a square photograph filling the screen edge to edge on
-              desktop, which read as a page that had broken rather than an image that had opened.
-              They are asymmetric on purpose: vertical space is what a landscape monitor is short
-              of, and it is also where the close button and the image counter live. `clamp` keeps a
-              phone from giving away width it does not have.
-            */
-            className={`relative isolate ${zoom ? "cursor-zoom-out" : "cursor-zoom-in"}`}
+            ref={railRef}
+            onScroll={onRailScroll}
+            className="no-scrollbar flex h-full w-full overscroll-x-contain"
             style={{
-              aspectRatio: ratio,
-              width: `min(
-                calc(100vw - 2 * ${LIGHTBOX_INSET_X}),
-                calc((100dvh - 2 * ${LIGHTBOX_INSET_Y} - ${
-                  lightingOn ? LIGHTBOX_BAR_SPACE : "0px"
-                }) * ${ratio})
-              )`,
+              overflowX: zoom ? "hidden" : "auto",
+              overflowY: "hidden",
+              scrollSnapType: zoom ? "none" : "x mandatory",
             }}
           >
-            <Image
-              src={image.url}
-              alt={image.altText || title}
-              fill
-              sizes="100vw"
-              // `contain` inside a box that already has the image's ratio means no letterbox is
-              // left inside the box -- the box IS the picture, which is why the wash can simply
-              // cover it.
-              className="object-contain transition-transform duration-300"
-              style={zoomStyle}
-            />
-            {/* Same transform as the image, so the tint zooms with it rather than sitting still. */}
-            <LightingWash active={lightingOn} style={zoomStyle} />
+            {images.map((img, i) => {
+              const r = (img.width || 1) / (img.height || 1);
+              const current = i === index;
+              return (
+                /* The padding is what moves the photograph UP when the bar is open; the height
+                   budget below is reduced by the same amount so it shrinks to fit rather than
+                   overflowing. Per slide, so every photograph clears the bar and not just this one. */
+                <div
+                  key={img.url}
+                  className="flex h-full w-full shrink-0 snap-center items-center justify-center"
+                  style={{ paddingBottom: lightingOn ? LIGHTBOX_BAR_SPACE : undefined }}
+                >
+                  {/*
+                    The box SHRINK-WRAPS the photograph rather than filling the slide, and that is a
+                    correctness requirement, not tidiness: `LightingWash` needs `isolate` to blend,
+                    and inside an isolated group anything the image does not cover gets painted the
+                    flat wash colour -- a full-bleed box turned the dark scrim solid cream, and solid
+                    WHITE at neutral, taking the white close button with it.
+
+                    Sized in VIEWPORT units, which is honest because this dialog IS the viewport
+                    (`h-dvh w-screen`, no padding): take all the width available unless the height
+                    runs out first. Two earlier attempts failed -- the image's natural size opened a
+                    450px Shopify variant inside a 900px dialog, and `aspect-ratio` with `max-h-full`
+                    simply did not clamp as a flex item, sending a square to 1440x1440 in 1440x900.
+
+                    The insets stop a square filling the screen edge to edge on desktop, which read
+                    as a broken page rather than an opened image. Asymmetric on purpose: vertical is
+                    the axis a landscape monitor is short of, and where the close button and counter
+                    live. `clamp` keeps a phone from giving away width it does not have.
+                  */}
+                  <div
+                    /* Only the picture on screen answers a tap, so a tap that lands mid-flick on a
+                       neighbour cannot zoom a photograph the shopper is not looking at. A scrolled
+                       gesture cancels its own click, which is what leaves tap-to-zoom working next
+                       to a drag without a single threshold to tune. */
+                    onClick={current ? toggleZoom : undefined}
+                    className={`relative isolate ${zoom ? "cursor-zoom-out" : "cursor-zoom-in"}`}
+                    style={{
+                      aspectRatio: r,
+                      width: `min(
+                        calc(100vw - 2 * ${LIGHTBOX_INSET_X}),
+                        calc((100dvh - 2 * ${LIGHTBOX_INSET_Y} - ${
+                          lightingOn ? LIGHTBOX_BAR_SPACE : "0px"
+                        }) * ${r})
+                      )`,
+                    }}
+                  >
+                    <Image
+                      src={img.url}
+                      alt={img.altText || (current ? title : "")}
+                      fill
+                      sizes="100vw"
+                      priority={current}
+                      // `contain` inside a box that already has the image's ratio means no letterbox
+                      // is left inside the box -- the box IS the picture, which is why the wash can
+                      // simply cover it.
+                      className="object-contain transition-transform duration-300"
+                      style={current ? zoomStyle : undefined}
+                    />
+                    {/* Same transform as the image, so the tint zooms with it rather than sitting
+                        still. Every slide carries one: a wash mounting mid-swipe is born the right
+                        colour from `currentWash`, so the incoming photograph is already tinted. */}
+                    <LightingWash active={lightingOn} style={current ? zoomStyle : undefined} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Judging a colour is what people zoom in FOR, so the control has to be reachable from

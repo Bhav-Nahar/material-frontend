@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowRight, Heart, Loader2, Trash2 } from "lucide-react";
+import { ArrowRight, Heart, Trash2 } from "lucide-react";
+
+import { ProductGridSkeleton } from "@/components/ui/skeleton";
 
 import { gtmItem, pushRemoveFromWishlist } from "@/lib/gtm";
 import {
@@ -47,8 +49,8 @@ export default function WishlistPage() {
 
   if (loading && items.length === 0) {
     return (
-      <div className="flex min-h-[240px] items-center justify-center">
-        <Loader2 className="size-5 animate-spin text-subtle" />
+      <div className="animate-pulse">
+        <ProductGridSkeleton count={4} className="lg:grid-cols-4" />
       </div>
     );
   }

@@ -68,7 +68,9 @@ export async function GET(request) {
     })),
   ];
 
-  return Response.json({ results });
+  // The CDN absorbs repeated queries -- "tile" typed by fifty shoppers is one function invocation
+  // per five minutes, matching the 300s the Shopify data behind it is cached for anyway.
+  return Response.json({ results }, { headers: { "Cache-Control": "public, s-maxage=300" } });
 }
 
 /** en-IN grouping, because ₹1,80,000 is not ₹180,000 to anyone reading this site. */

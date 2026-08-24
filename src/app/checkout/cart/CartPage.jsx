@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 import WhatsappIcon from "@/components/common/WhatsappIcon";
 import StickyCta from "@/components/checkout/StickyCta";
 import { CATEGORIES } from "@/data/catalog";
@@ -64,8 +66,11 @@ export default function CartPage() {
   const hasUnavailableLine = items.some((item) => item.inStock === false);
   // A line asking for more than Shopify says exists. Paying for 15 boxes of which 3 are real is an
   // oversold order and a refund call -- blocked here, where the quantity can still be reduced.
+  // stockLeft > 0 only: Shopify reports quantityAvailable 0 (or negative) for untracked inventory
+  // and for "continue selling when out of stock" -- lines it is itself happy to sell. Blocking on
+  // those greyed the checkout button for a purchasable cart.
   const hasShortLine = items.some(
-    (item) => item.inStock !== false && item.stockLeft !== null && item.stockLeft < item.quantity,
+    (item) => item.inStock !== false && item.stockLeft > 0 && item.stockLeft < item.quantity,
   );
 
   // Shopify quotes tax-inclusive prices on an Indian storefront, so the GST line is extracted from
@@ -136,9 +141,26 @@ export default function CartPage() {
   // "0" here.
   if (items.length === 0) {
     if (!settled) {
+      // Shaped like the cart that is probably coming, not a spinner: the customer who just tapped
+      // "cart" from the header is nearly always looking at a full one.
       return (
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <Loader2 className="size-5 animate-spin text-subtle" />
+        <div className="container-main mt-6 animate-pulse pb-16 lg:mt-8">
+          <Skeleton className="h-7 w-40" />
+          <div className="mt-6 flex flex-col gap-10 lg:flex-row">
+            <div className="flex-1 space-y-6">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="size-24 shrink-0 lg:size-32" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-11/12" />
+                    <Skeleton className="mt-2 h-4 w-2/3 opacity-60" />
+                    <Skeleton className="mt-4 h-8 w-28 opacity-60" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Skeleton className="h-72 w-full opacity-60 lg:w-80" />
+          </div>
         </div>
       );
     }
@@ -332,7 +354,7 @@ export default function CartPage() {
                       <span className="size-1.5 rounded-full bg-bad" />
                       Out of stock — remove it to check out
                     </p>
-                  ) : item.stockLeft !== null && item.stockLeft <= item.quantity ? (
+                  ) : item.stockLeft > 0 && item.stockLeft <= item.quantity ? (
                     <p className="num flex items-center gap-1.5 text-xs text-warn">
                       <span className="size-1.5 rounded-full bg-warn" />
                       Only {item.stockLeft} left
