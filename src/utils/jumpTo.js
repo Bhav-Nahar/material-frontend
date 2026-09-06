@@ -18,10 +18,20 @@
  * a scroll offset -- a number -- not an element, so layout shifting underneath mid-flight cannot
  * pull the destination around. Get the number right and the landing is right.
  *
- * NO `behavior` ARGUMENT, on purpose. The default 'auto' means "use the computed scroll-behavior",
- * which is the `scroll-behavior: smooth` in globals.css -- and that rule is already behind
+ * NO `behavior: 'smooth'`, on purpose. 'auto' means "use the computed scroll-behavior", which is
+ * the `scroll-behavior: smooth` in globals.css -- and that rule is already behind
  * prefers-reduced-motion. Passing 'smooth' here would force the animation on someone who asked
  * their OS for none.
+ *
+ * BUT NOT OVER ANY DISTANCE (user, 2026-09-05: the jump to the reviews "is not a smooth flow").
+ * The landing was never wrong -- measured, it puts the section exactly on its scroll-margin -- the
+ * trip was. #reviews sits ~2700px down a PDP now that the mosaic shows every photograph, and a
+ * native smooth scroll over that is a second and a half of blur during which the browser is also
+ * decoding eight full-width tiles that the flight path drags through the viewport. The animation
+ * stopped being orientation and became waiting.
+ *
+ * A screen or two is the range where gliding tells you WHERE you went, which is what the note in
+ * globals.css is protecting. Past that nobody is tracking scenery, so go straight there.
  *
  * The href stays on the element: it is what makes the link real -- open in a new tab, copy link
  * address, and a working jump with JavaScript off. This only takes over when it can do the job, so
@@ -31,8 +41,11 @@
  * should not cost ten presses of the back button to leave the page.
  */
 
-/** Matches the threshold in Header.jsx. Below this the header is open; above it, collapsed. */
+/** Matches COLLAPSE_ABOVE in lib/headerCollapse. Below this the header is open; above it, collapsed. */
 const HEADER_COLLAPSE_AT = 120;
+
+/** How far a glide stays useful, in viewport heights. Past this the jump is instant. */
+const SMOOTH_WITHIN_SCREENS = 2;
 
 /**
  * How much document height the header is about to give back.
@@ -67,6 +80,36 @@ export const jumpTo = (id) => (event) => {
     target -= pendingHeaderCollapse();
   }
 
-  window.scrollTo({ top: Math.max(0, Math.round(target)) });
+  const top = Math.max(0, Math.round(target));
+
+  /*
+   * SCROLL ANCHORING HAS TO BE HELD OFF for the length of the collapse, or the correction above is
+   * spent twice and the landing is 105px out.
+   *
+   * Chrome and Firefox watch the document shrink above the viewport and move scrollY to keep the
+   * content visually still. That is the right instinct everywhere else on this site -- it is what
+   * makes the header collapse look like nothing happened -- but here we have ALREADY accounted for
+   * that shrink, so the browser's help lands us short. A smooth scroll used to hide this by
+   * out-running it: the animation keeps driving toward a fixed offset whatever anchoring does. An
+   * instant scroll arrives first and gets dragged afterwards, measured at exactly the 105px the
+   * collapse removes.
+   *
+   * Safari implements no scroll anchoring at all, so it always needed the correction as written.
+   * Turning anchoring off for the trip makes every browser behave the way Safari already did, and
+   * the arithmetic have one answer instead of two.
+   */
+  const root = document.documentElement;
+  const anchoring = root.style.overflowAnchor;
+  root.style.overflowAnchor = "none";
+  // Comfortably past the 250ms collapse in Header.jsx; restoring early is what re-opens the drift.
+  setTimeout(() => {
+    root.style.overflowAnchor = anchoring;
+  }, 400);
+
+  window.scrollTo({
+    top,
+    // 'auto' defers to the stylesheet, which is smooth and already respects reduced motion.
+    behavior: Math.abs(top - from) > window.innerHeight * SMOOTH_WITHIN_SCREENS ? "instant" : "auto",
+  });
   history.replaceState(null, "", `#${id}`);
 };

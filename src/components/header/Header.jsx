@@ -8,6 +8,7 @@ import Navbar from "./Navbar";
 import MobileHeader from "./MobileHeader";
 
 import { cn } from "@/lib/utils";
+import { nextHideTop } from "@/lib/headerCollapse";
 
 /**
  * Adapted from the jewelry build's Header.jsx. Two changes, both for performance:
@@ -45,13 +46,35 @@ import { cn } from "@/lib/utils";
  * The outer element is the grid and owns the transition; the inner one MUST carry `min-h-0`, or
  * its content sets a floor the 0fr track cannot go below and the whole thing simply does not move.
  */
-function Collapse({ open, className, children, ...rest }) {
+/**
+ * `openClassName` lands only once the row has actually FINISHED growing, and that timing is the
+ * whole point of the prop rather than a nicety. MainHeader's Collapse needs `overflow-visible` so
+ * its search dropdown can escape, but applied on the same render that flips `open` it un-clips a
+ * track that is still 0fr -- so MainHeader's 65px of content paints outside its zero-height box and
+ * lands on the Navbar strip below it. Scrolling back up past 120 put the wordmark, the search row
+ * and the account icons on top of TILES/LAMINATES for the length of the transition.
+ *
+ * Clipped while it moves, visible once it has arrived. `settledOpen` is the `open` the transition
+ * last FINISHED on, so `open && settledOpen` is true only at rest in the open state -- the grow is
+ * clipped because settledOpen is still false, and the shrink is clipped by `open` alone, which
+ * needs no reset and so no effect. The 250ms stays in the class list and nowhere else.
+ */
+function Collapse({ open, className, openClassName, children, ...rest }) {
+  const [settledOpen, setSettledOpen] = useState(open);
+
   return (
     <div
       {...rest}
+      // Children transition too (MainHeader's own), so match the property and the element.
+      onTransitionEnd={(e) => {
+        if (e.target === e.currentTarget && e.propertyName === "grid-template-rows") {
+          setSettledOpen(open);
+        }
+      }}
       className={cn(
         "grid overflow-hidden transition-[grid-template-rows,opacity] duration-[250ms] ease-out",
         open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+        open && settledOpen && openClassName,
         className,
       )}
     >
@@ -63,11 +86,17 @@ function Collapse({ open, className, children, ...rest }) {
 export default function Header({ menuData }) {
   const [hideTop, setHideTop] = useState(false);
 
-  // A plain listener, not framer's useScroll: the only question is whether one number is past 120,
-  // and a motion value that re-renders this tree on every frame is a lot of machinery for a
-  // boolean. React bails out when it is unchanged, so a scroll costs no re-render.
+  // A plain listener, not framer's useScroll: the only question is which side of a threshold one
+  // number is on, and a motion value that re-renders this tree on every frame is a lot of machinery
+  // for a boolean. React bails out when it is unchanged, so a scroll costs no re-render.
+  //
+  // WHICH threshold depends on the state we are in -- see headerCollapse. It was a bare
+  // `scrollY > 120`, and because this header is sticky (so its height is IN FLOW) the collapse
+  // moved scrollY through scroll anchoring and shoved the number back over that one threshold:
+  // expand, collapse, expand, ~8 frames a cycle, forever. The updater form matters here, since the
+  // decision needs the previous state and a stale closure would answer for the wrong threshold.
   useEffect(() => {
-    const onScroll = () => setHideTop(window.scrollY > 120);
+    const onScroll = () => setHideTop((wasHidden) => nextHideTop(wasHidden, window.scrollY));
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -104,7 +133,8 @@ export default function Header({ menuData }) {
           <Collapse
             open={!hideTop}
             data-collapses-on-scroll
-            className={cn("relative z-20", hideTop ? "" : "overflow-visible")}
+            openClassName="overflow-visible"
+            className="relative z-20"
           >
             <MainHeader />
           </Collapse>

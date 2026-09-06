@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getProduct, getRelated } from "@/lib/product";
+import { getProduct, getRelated, wholeRows } from "@/lib/product";
 import { getReviews } from "@/lib/reviews";
-import ProductRail from "@/components/product/ProductRail";
+import ProductCard from "@/components/product/ProductCard";
 import ProductReviews from "@/components/product/ProductReviews";
 import RecentlyViewed from "@/components/product/RecentlyViewed";
 import HomeFaqs from "@/components/home/HomeFaqs";
@@ -144,13 +144,36 @@ export default async function Page({ params }) {
           inserted between the two leaves that list ending on nothing. */}
       <ProductReviews summary={reviews} product={product} />
 
+      {/* A GRID, NOT A RAIL (user, 2026-09-05). This was a Swiper like the other three, and the
+          argument against it is the shopper's own gesture: they arrive here scrolling DOWN, and a
+          horizontal rail asks them to change axis to see anything past the second card. Everything
+          off the right edge is behind a gesture nobody makes, on the one block whose job is to give
+          a page that did not convert somewhere else to go. Stacked rows are read by the scroll that
+          is already happening.
+
+          grid-products is the same 2/3/4-column track the collection and search results use, so a
+          shopper who lands here from either sees the same shelf laid out the same way -- and it is
+          already written, which is why there is no new layout here.
+
+          FOUR COLUMNS on desktop and up to SIXTEEN cards -- four full rows (user, 2026-09-05).
+          Explicit tracks rather than grid-products, which is 3-up at lg and would have to change
+          under the collection and search grids too to get a fourth column here.
+
+          The count is trimmed to whole rows by wholeRows: a shelf ending in three cards under a row
+          of four leaves a card-and-a-half of blank paper at the very bottom of the page. It never
+          trims to nothing -- a collection of three still shows its three, see the note there.
+
+          `list` still says "rail:related" on purpose -- it is an analytics series with history
+          behind it, and renaming it to match the markup would split the funnel in two. */}
       {related.length > 0 && (
         <section className="container-main mt-6 lg:mt-8">
           <h2 className="font-display text-lg tracking-[-0.02em] lg:text-xl">
             More from {product.collection?.title ?? product.category}
           </h2>
-          <div className="mt-4">
-            <ProductRail products={related} priorityCount={0} list="rail:related" />
+          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-4 lg:gap-x-6">
+            {wholeRows(related, 4, 16).map((p, i) => (
+              <ProductCard key={p.handle} product={p} list="rail:related" index={i} />
+            ))}
           </div>
         </section>
       )}

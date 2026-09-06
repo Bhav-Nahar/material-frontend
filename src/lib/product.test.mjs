@@ -143,3 +143,77 @@ test("toCardProduct without coverage prices the pack and claims no unit", () => 
 
   assert.equal(toCardProduct({ media: [], variants: [] }), null);
 });
+
+/**
+ * The related shelf's row maths. The failure worth catching is not an off-by-one in the count --
+ * it is the small catalogue where flooring to whole rows removes the section entirely.
+ */
+import { wholeRows } from "./product.js";
+
+const shelf = (n) => Array.from({ length: n }, (_, i) => ({ handle: `p${i}` }));
+
+test("a full shelf is capped at the maximum", () => {
+  assert.equal(wholeRows(shelf(40), 4, 16).length, 16);
+  assert.equal(wholeRows(shelf(16), 4, 16).length, 16);
+});
+
+test("a ragged last row is dropped rather than left half empty", () => {
+  assert.equal(wholeRows(shelf(15), 4, 16).length, 12);
+  assert.equal(wholeRows(shelf(13), 4, 16).length, 12);
+  assert.equal(wholeRows(shelf(7), 4, 16).length, 4);
+});
+
+test("a short catalogue keeps its cards instead of vanishing", () => {
+  // Flooring would give zero rows here, and the section would not render at all.
+  for (const n of [1, 2, 3]) assert.equal(wholeRows(shelf(n), 4, 16).length, n);
+  assert.equal(wholeRows(shelf(0), 4, 16).length, 0);
+});
+
+test("whole rows already, at any column count", () => {
+  assert.equal(wholeRows(shelf(9), 3, 16).length, 9);
+  assert.equal(wholeRows(shelf(10), 2, 16).length, 10);
+});
+
+/**
+ * The spec chips. These were a stored array until they became a function, so the thing worth
+ * pinning is that a MISSING field produces no chip rather than a chip reading "undefined finish".
+ */
+import { specChips } from "./product.js";
+
+const specsOf = (over) => ({
+  look: "Marble",
+  material: "Vitrified",
+  finish: "Matte",
+  slipRating: "R10",
+  application: ["Living room", "Bedroom"],
+  ...over,
+});
+
+test("every set field becomes one chip, tagged with the field it came from", () => {
+  assert.deepEqual(specChips(specsOf()), [
+    { label: "Marble", kind: "look" },
+    { label: "Vitrified", kind: "material" },
+    { label: "Matte finish", kind: "finish" },
+    { label: "Slip R10", kind: "slip" },
+    { label: "Living room", kind: "room" },
+    { label: "Bedroom", kind: "room" },
+  ]);
+});
+
+test("an unset field is absent, not an 'undefined finish' chip", () => {
+  const sparse = specChips({ look: null, material: "Ceramic", finish: null, slipRating: null });
+  assert.deepEqual(sparse, [{ label: "Ceramic", kind: "material" }]);
+  for (const chip of sparse) assert.ok(!/undefined|null/.test(chip.label));
+});
+
+test("no specs at all is an empty row, not a crash", () => {
+  assert.deepEqual(specChips(undefined), []);
+  assert.deepEqual(specChips({}), []);
+  assert.deepEqual(specChips({ application: [] }), []);
+});
+
+test("rooms all share one kind however many there are", () => {
+  const rooms = specChips({ application: ["Kitchen", "Bath", "Balcony"] });
+  assert.equal(rooms.length, 3);
+  assert.ok(rooms.every((c) => c.kind === "room"));
+});

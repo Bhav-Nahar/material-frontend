@@ -95,12 +95,59 @@ export async function getProduct(handle) {
  * `productRecommendations` needs its own request and has nothing to learn from on a store with one
  * product; swap this body for it when there is order history worth mining.
  */
-export async function getRelated(collectionHandle, exclude, first = 12) {
+export async function getRelated(collectionHandle, exclude, first = 17) {
   if (!collectionHandle) return [];
   const data = await storefront("getRelated", RELATED_QUERY, { handle: collectionHandle, first });
   return attachRatings(
     mapProducts(data?.collection?.products?.nodes).filter((p) => p.handle !== exclude),
   );
+}
+
+/**
+ * The related shelf, trimmed to WHOLE ROWS.
+ *
+ * A grid ends on a ragged row the moment the count is not a multiple of the column count -- three
+ * cards under a row of four, with a card-and-a-half of blank paper beside them, at the very bottom
+ * of the page. Dropping the remainder costs a card or two nobody scrolled to and buys a shelf that
+ * ends on a straight edge (user, 2026-09-05).
+ *
+ * IT NEVER TRIMS TO NOTHING, which is the whole reason this is a function and not a `slice` at the
+ * call site. A collection holding three products floors to zero rows, and the section would vanish
+ * -- taking the page's only way out with it, on exactly the small catalogue where that matters most.
+ * Under one full row, show what there is and let the row be short.
+ */
+export function wholeRows(products, columns, max) {
+  const capped = products.slice(0, max);
+  if (capped.length < columns) return capped;
+  return capped.slice(0, columns * Math.floor(capped.length / columns));
+}
+
+/**
+ * The chips under the price -- Material Depot's row of "Easy to Install / Scratch Resistance /
+ * Bathroom Wall". Theirs are a hand-tagged marketing list; ours come from the SPEC metafields that
+ * are actually set, so a chip can never claim something the product data does not say.
+ *
+ * DERIVED, NOT SHIPPED (audited 2026-09-05). This used to be built during the mapping and sent as a
+ * `chips` array alongside `specs` -- the same five facts serialised twice into every product
+ * payload, one of them shaped for one component. Nothing else ever read it. A function costs the
+ * page nothing and the wire nothing.
+ *
+ * Each chip carries its `kind` as well as its label, because SpecChips tints by kind -- the colour
+ * is doing information design (what it is made of / how it behaves / where it goes) rather than
+ * decoration, and that is only possible if the field it came from survives the mapping.
+ */
+export function specChips(specs) {
+  if (!specs) return [];
+
+  return [
+    specs.look && { label: specs.look, kind: "look" },
+    specs.material && { label: specs.material, kind: "material" },
+    specs.finish && { label: `${specs.finish} finish`, kind: "finish" },
+    specs.slipRating && { label: `Slip ${specs.slipRating}`, kind: "slip" },
+    // Rooms last, and tagged as one kind however many there are -- they are a different sort of
+    // fact from the four above (where it goes, not what it is), and SpecChips colours them apart.
+    ...(specs.application ?? []).map((room) => ({ label: room, kind: "room" })),
+  ].filter(Boolean);
 }
 
 /* ------------------------------------------------------------------ coverage maths */
@@ -135,25 +182,6 @@ function mapProduct(p) {
 
   const collection = p.collections?.nodes?.[0] ?? null;
 
-  /**
-   * The chips under the price -- Material Depot's row of "Easy to Install / Scratch Resistance /
-   * Bathroom Wall". Theirs are a hand-tagged marketing list; ours are the SPEC metafields that are
-   * actually set, so a chip can never claim something the product data does not say.
-   *
-   * Each chip carries its `kind` as well as its label, because SpecChips tints by kind -- the colour
-   * is doing information design (what it is made of / how it behaves / where it goes) rather than
-   * decoration, and that is only possible if the field it came from survives the mapping.
-   */
-  const chips = [
-    p.look?.value && { label: p.look.value, kind: "look" },
-    p.material?.value && { label: p.material.value, kind: "material" },
-    p.finish?.value && { label: `${p.finish.value} finish`, kind: "finish" },
-    p.slipRating?.value && { label: `Slip ${p.slipRating.value}`, kind: "slip" },
-    // Rooms last, and tagged as one kind however many there are -- they are a different sort of
-    // fact from the four above (where it goes, not what it is), and SpecChips colours them apart.
-    ...safeList(p.application?.value).map((room) => ({ label: room, kind: "room" })),
-  ].filter(Boolean);
-
   return {
     id: p.id,
     handle: p.handle,
@@ -183,7 +211,6 @@ function mapProduct(p) {
       slipRating: p.slipRating?.value ?? null,
       application: safeList(p.application?.value),
     },
-    chips,
     // Multi-line text metafields, split into the lines the admin typed. Rendered as a list; the
     // field carries no markup and is not run through dangerouslySetInnerHTML.
     installation: lines(p.installation?.value),

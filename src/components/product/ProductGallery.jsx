@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useRef, useState } from "react";
+import { startTransition, useRef, useState } from "react";
 import Image from "next/image";
 import { Heart, Share2 } from "lucide-react";
 import {
@@ -9,6 +9,7 @@ import {
   LightingWash,
 } from "@/components/product/LightingPreview";
 import GalleryLightbox from "@/components/product/GalleryLightbox";
+import { useStickyFit } from "@/hooks/useStickyFit";
 
 /**
  * The PDP gallery, following the jewelry build's arrangement:
@@ -28,17 +29,14 @@ import GalleryLightbox from "@/components/product/GalleryLightbox";
  * overlay, and the pinch/wheel zoom rig. The zoom here is one click, one transform.
  */
 
-/** Height of the sticky site header (measured), plus a gutter. */
-const HEADER = 168;
-
-/**
- * How many photographs the DESKTOP mosaic shows inline. The mosaic used to render every image, two
- * per row, so a ten-image product built a 1552px column beside a 670px buy box -- 882px, 57% of the
- * right-hand column, blank paper (user, 2026-08-21). Four keeps the mosaic two rows tall, which is
- * about the height of the buy box, and the rest are one click away in the lightbox that already
- * exists. Mobile is untouched: the rail there costs no vertical space per extra image.
+/*
+ * THE MOSAIC SHOWS EVERY PHOTOGRAPH (user, 2026-09-05). It was capped at four behind a "View all N
+ * photos" button, because ten images built a 1552px column beside a 670px buy box and left 882px of
+ * blank paper down the right -- 57% of that column. The cap was the wrong half of that problem to
+ * fix: the buy box is sticky now (useStickyFit, applied to both columns), so it rides down the page
+ * beside the extra rows instead of leaving them facing nothing. The blank paper is gone, and with it
+ * the reason to hide photographs of the material behind a click on a page that sells how it looks.
  */
-const MOSAIC_MAX = 4;
 
 export default function ProductGallery({ images, title, tag, wishlisted, onWishlist, onShare }) {
   const [index, setIndex] = useState(0);
@@ -59,41 +57,15 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
    */
   const [lightingOpen, setLightingOpen] = useState(false);
 
-  /* The mosaic opens IN PLACE rather than sending the extra photographs to the lightbox (user,
-     2026-08-21): comparing a room shot against a plank detail is the whole job of this gallery, and
-     a lightbox shows one image at a time, which is the opposite of a comparison. */
-  const [expanded, setExpanded] = useState(false);
-
-
-
-
   const railRef = useRef(null);
-  const gridRef = useRef(null);
+
+  /* Pins beside the buy box -- and lets the buy box pin beside IT when the gallery is the taller of
+     the two. See useStickyFit. */
+  const [gridRef, stickyTop] = useStickyFit();
 
   /* The lightbox's dialog content, once mounted. The lighting bar portals into it while the zoom
      is open so Radix's scroll lock does not eat the slider's drag -- see the portal in LightingBar. */
   const [lightboxEl, setLightboxEl] = useState(null);
-  const [stickyTop, setStickyTop] = useState(HEADER);
-
-  /**
-   * The jewelry build's sticky trick, in six lines rather than twenty: a mosaic TALLER than the
-   * viewport gets a negative offset, so it keeps scrolling until its last image sits against the
-   * bottom of the screen and then pins. A short one just pins under the header. Without this a tall
-   * gallery pins at the top and its bottom images can never be reached while the buy box is still
-   * in view.
-   */
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    const fit = () => setStickyTop(Math.min(HEADER, window.innerHeight - el.offsetHeight - 24));
-    const observer = new ResizeObserver(fit);
-    observer.observe(el);
-    window.addEventListener("resize", fit);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", fit);
-    };
-  }, []);
 
   if (images.length === 0) return null;
 
@@ -178,9 +150,14 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
       <div
         ref={gridRef}
         style={{ top: `${stickyTop}px` }}
-        className="sticky hidden grid-cols-2 gap-4 lg:grid"
+        // FLUSH (user, 2026-09-05). The tiles used to sit at gap-4 with a hairline and a radius
+        // each, which framed eight photographs as eight cards. On a page selling a surface, the
+        // photographs ARE the surface: butted together they read as one continuous sheet of the
+        // material, which is the thing being judged. The frame moves to the block -- one border and
+        // one radius around the whole mosaic, with overflow-hidden so the corner tiles clip to it.
+        className="sticky hidden grid-cols-2 gap-0 overflow-hidden rounded-sm border border-line lg:grid"
       >
-        {images.slice(0, expanded ? images.length : MOSAIC_MAX).map((img, i) => (
+        {images.map((img, i) => (
           /*
             Each tile is WRAPPED rather than being the grid child itself, for one reason: the
             lighting trigger belongs in the corner of the FIRST photograph, and a <button> cannot
@@ -196,7 +173,8 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
               type="button"
               onClick={() => show(i)}
               aria-label={`Enlarge image ${i + 1} of ${images.length}`}
-              className="group relative isolate block aspect-swatch w-full cursor-zoom-in overflow-hidden rounded-sm border border-line bg-paper"
+              // No border or radius of its own -- the mosaic carries both now.
+              className="group relative isolate block aspect-swatch w-full cursor-zoom-in overflow-hidden bg-paper"
             >
               <Image
                 src={img.url}
@@ -221,20 +199,6 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
             )}
           </div>
         ))}
-
-        {/* Reveals the rest of the mosaic in place. Each tile keeps its own click-to-zoom, so the
-            lightbox is still one click away from any photograph -- it is just no longer the only way
-            to reach the ones past the fold. */}
-        {images.length > MOSAIC_MAX && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            className="col-span-2 cursor-pointer rounded-sm border border-line bg-surface py-3 text-xs font-semibold uppercase tracking-wide text-ink transition-colors hover:border-line-strong"
-          >
-            {expanded ? "Show fewer photos" : `View all ${images.length} photos`}
-          </button>
-        )}
 
         {/* Badge and controls are positioned against the grid itself, which puts them over the FIRST
             tile -- the one corner that is a tile at every image count. */}
@@ -400,7 +364,7 @@ function Controls({ wishlisted, onWishlist, onShare, title }) {
 
 function Tag({ children }) {
   return (
-    <span className="pointer-events-none absolute left-3 top-3 z-10 rounded-sm bg-ink px-2.5 py-1 text-[11px] leading-none text-white">
+    <span className="pointer-events-none absolute left-0 top-0 z-10 rounded-br-sm bg-ink px-3 py-1.5 text-xs font-medium tracking-wide leading-none text-white">
       {children}
     </span>
   );

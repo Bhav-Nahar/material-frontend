@@ -61,7 +61,15 @@ const INSET_X = "clamp(0.5rem, 3vw, 4rem)";
 /** Shopify resizes on its own CDN, so a srcSet is four query strings rather than four uploads. */
 const WIDTHS = [640, 1080, 1600, 2048];
 
-const toSlide = (img) => ({
+const toSlide = (img) => {
+  // Review photographs live on judge.me, where Shopify's `width` parameter means nothing -- a
+  // srcSet built from it is four downloads of one identical file under four query strings. Anything
+  // not on Shopify's CDN is served as it came.
+  if (!img.url.includes("cdn.shopify.com")) {
+    return { src: img.url, alt: img.altText || "" };
+  }
+
+  return {
   src: shopifyLoader({ src: img.url, width: 1600 }),
   alt: img.altText || "",
   width: img.width || undefined,
@@ -73,7 +81,8 @@ const toSlide = (img) => ({
     // bytes land. Falls back to the width when Shopify did not report dimensions.
     height: img.width && img.height ? Math.round((width * img.height) / img.width) : width,
   })),
-});
+  };
+};
 
 export default function GalleryLightbox({
   open,

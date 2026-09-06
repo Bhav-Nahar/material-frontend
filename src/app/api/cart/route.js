@@ -113,9 +113,14 @@ export async function GET() {
   if (!id) return Response.json(empty());
 
   const data = await storefront(CART_QUERY, { id });
-  // A cart Shopify has since discarded comes back as null, not an error. Report an empty cart
-  // rather than an error the header would have to special-case.
-  return Response.json(data?.cart ? mapCart(data.cart) : empty());
+  // SAME DISTINCTION THE ADD PATH MAKES, and for the same reason. `data.cart === null` is a cart
+  // Shopify has discarded -- an empty cart is the honest answer and saves the header a special
+  // case. `data === null` is the CALL having failed, and answering "empty" there tells a customer
+  // with a full basket that they have nothing: the badge drops to 0 and both checkout steps show
+  // their empty state over a cart that is still sitting in Shopify. 502 instead, so the pages that
+  // already tolerate a failed sync keep showing the last good cart.
+  if (!data) return Response.json({ error: "Could not reach the cart" }, { status: 502 });
+  return Response.json(data.cart ? mapCart(data.cart) : empty());
 }
 
 export async function POST(request) {
@@ -154,10 +159,28 @@ export async function POST(request) {
   let cart = null;
   if (existing) {
     const data = await storefront(CART_LINES_ADD, { cartId: existing, lines });
+    /*
+      A FAILED CALL IS NOT AN EXPIRED CART, and conflating the two used to destroy live carts.
+
+      storefront() answers `null` for every kind of failure -- a 429, a 5xx, a GraphQL error, a
+      dropped connection. It does NOT answer null for "this cart is gone": a cart Shopify no longer
+      recognises comes back WITH a cart (Shopify mints a replacement itself) plus a userError saying
+      the old one did not exist, so that case never reaches here. Verified against the live
+      Storefront API, 2026-09-04.
+
+      So a null here means the request failed while the cart is still perfectly alive, and falling
+      through to cartCreate replaced it with a one-line cart -- silently, under a 200. A 12-box,
+      Rs 16,838 cart became Rs 640 on one rate-limited add. Failing the add instead is the same
+      posture PATCH has always taken three functions down: an add the customer can retry costs
+      nothing, and a wiped basket costs the order.
+    */
+    if (!data) {
+      return Response.json({ error: "Could not reach the cart" }, { status: 502 });
+    }
     cart = data?.cartLinesAdd?.cart ?? null;
   }
-  // No cart yet, or the one we had has expired -- either way, start a fresh one rather than
-  // failing the add. buyerIdentity pairs with @inContext above; both are needed for INR pricing.
+  // No cart in this browser yet -- the first add of a visit. buyerIdentity pairs with @inContext
+  // above; both are needed for INR pricing.
   if (!cart) {
     const data = await storefront(CART_CREATE, {
       input: { lines, buyerIdentity: { countryCode: "IN" } },

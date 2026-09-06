@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useDispatch, useSelector } from "react-redux";
 import { ArrowRight, Lock, ShoppingCart, Star, Wallet } from "lucide-react";
 
 import ProductGallery from "@/components/product/ProductGallery";
+import { useStickyFit } from "@/hooks/useStickyFit";
 import { jumpTo } from "@/utils/jumpTo";
 import BuySheet from "@/components/product/BuySheet";
 import PincodeCheck from "@/components/product/PincodeCheck";
@@ -123,6 +125,10 @@ export default function ProductPage({ product, reviews }) {
    * scroll that follows. One rect read per frame is the boring version that cannot get stuck, and
    * React bails out when the boolean is unchanged, so a scroll costs no re-render.
    */
+  /* The buy column pins beside the gallery -- see useStickyFit for why both columns get the same
+     rule rather than one of them being declared the sticky one. */
+  const [buyRef, buyTop] = useStickyFit();
+
   const ctaRef = useRef(null);
   const [barShown, setBarShown] = useState(false);
   useEffect(() => {
@@ -347,8 +353,14 @@ export default function ProductPage({ product, reviews }) {
           with the buy box marooned on the right -- see the fx-no-images fixture. With no media the grid
           collapses to one column and the buy box takes its natural width on the left, which is what a
           product page without pictures should look like. */}
+      {/* items-start, not the default stretch: a stretched track takes the TALLER column's height,
+          so the buy box had no height of its own and `sticky` had nothing to pin. Each column now
+          measures itself, which is also what useStickyFit reads.
+
+          The top margin came down from mt-4/lg:mt-6 (user, 2026-09-05): with the breadcrumb's own
+          lg:py-3 under it that was 36px of air between an 11px crumb and the photographs. */}
       <div
-        className={`container-main mt-4 grid grid-cols-1 gap-8 lg:mt-6 lg:gap-10 ${
+        className={`container-main mt-2 grid grid-cols-1 items-start gap-8 lg:mt-3 lg:gap-10 ${
           hasMedia ? "lg:grid-cols-12" : ""
         }`}
       >
@@ -368,7 +380,15 @@ export default function ProductPage({ product, reviews }) {
         )}
 
         {/* ================================== BUY BOX ================================== */}
-        <div className={hasMedia ? "lg:col-span-5" : "lg:max-w-xl"}>
+        {/* Pinned beside the gallery -- or scrolling past it, if the buy box is the taller of the
+            two. useStickyFit gives both columns the same rule, so the one that fits the viewport is
+            the one that rides down the page and nothing has to decide which that is. Desktop only:
+            below lg the columns are stacked and there is nothing to pin against. */}
+        <div
+          ref={buyRef}
+          style={{ top: `${buyTop}px` }}
+          className={`lg:sticky ${hasMedia ? "lg:col-span-5" : "lg:max-w-xl"}`}
+        >
           {product.category && (
             <p className="text-[11px] uppercase tracking-wide text-subtle">{product.category}</p>
           )}
@@ -381,11 +401,14 @@ export default function ProductPage({ product, reviews }) {
               no "(0)": this page refuses invented social proof everywhere else, and a greyed-out
               row of stars beside a real price is the same lie drawn instead of written.
 
-              It reads as a LINK, not a caption. Two jumps, because they are two different questions
-              and a shopper arrives with one or the other: the score jumps to the reviews, and "Write
-              a review" jumps to the same place for someone who came back to say something. Both are
-              anchors to #reviews rather than buttons -- the section is already on the page, five
-              screens down, and an anchor works with JavaScript off and can be opened in a new tab.
+              It reads as a LINK, not a caption: the score jumps to the reviews. An anchor to
+              #reviews rather than a button -- the section is already on the page, five screens
+              down, and an anchor works with JavaScript off and can be opened in a new tab.
+
+              "WRITE A REVIEW" IS NOT IN THIS FOLD (user, 2026-09-05). It sat beside the pill and
+              pointed at the same #reviews anchor, so it bought no reach -- and it asks the one
+              question a first-time visitor cannot answer, in the fold whose only job is to get them
+              to a price. ProductReviews still carries it, next to the reviews it belongs with.
 
               The average is spelled out here (4.3, not just stars) because this is where the buying
               decision is made and the difference between 4.1 and 4.8 is the whole point. The card
@@ -420,14 +443,6 @@ export default function ProductPage({ product, reviews }) {
                 <span className="num text-xs leading-none text-subtle">
                   {reviews.count} review{reviews.count === 1 ? "" : "s"}
                 </span>
-              </a>
-
-              <a
-                href="#reviews"
-                onClick={jumpTo("reviews")}
-                className="text-xs text-action-ink underline-offset-4 hover:underline"
-              >
-                Write a review
               </a>
             </div>
           )}
@@ -479,7 +494,7 @@ export default function ProductPage({ product, reviews }) {
           {/* SPEC CHIPS. Material Depot's row, built from the metafields that are actually set
               rather than a hand-written marketing list -- see mapProduct in lib/product.js. Tinted
               by kind; the palette and why it stops short of a rainbow are documented in SpecChips. */}
-          <SpecChips chips={product.chips} />
+          <SpecChips specs={product.specs} />
 
           {/* OPTIONS. Shared with the buy sheet -- see VariantOptions. */}
           <div className="mt-6">
@@ -655,12 +670,40 @@ export default function ProductPage({ product, reviews }) {
           barShown ? "" : "pointer-events-none translate-y-full lg:-translate-y-full"
         }`}
       >
-        <p className="hidden min-w-0 flex-1 truncate text-sm text-ink lg:block">
-          {product.title}
-          {variant.title !== "Default Title" && (
-            <span className="num text-subtle"> · {variant.title}</span>
+        {/* THE SWATCH LEADS (user, 2026-09-05). This bar appears once the buy box has scrolled away,
+            so by then the photograph is gone too and the row was four lines of text with no sign of
+            what it is about. On a page selling how a material LOOKS, the thumbnail is the fastest
+            reminder of which tile is being priced -- and it makes the bar read as the product
+            rather than as a toolbar.
+
+            alt="" on purpose: the title is the next element in the row, and a screen reader that
+            announces the same product name twice in one bar is worse than one that skips a
+            decorative 44px square. Desktop only, like the price -- the phone bar is WhatsApp and a
+            full-width Add, and anything else in that row squeezes the primary action. */}
+        <div className="hidden min-w-0 flex-1 items-center gap-3 lg:flex">
+          {product.media?.[0]?.url && (
+            <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-sm border border-line bg-paper">
+              <Image
+                src={product.media[0].url}
+                alt=""
+                fill
+                sizes="44px"
+                unoptimized={product.media[0].url.includes("cdn.shopify.com")}
+                className="object-cover"
+              />
+            </span>
           )}
-        </p>
+
+          {/* truncate, NOT a second line: this bar is pinned over the nav at a fixed height, and a
+              title that wrapped would either push the row taller or spill behind the button. The
+              full name is on the page behind it and in the sheet the button opens. */}
+          <p className="min-w-0 truncate text-sm text-ink">
+            {product.title}
+            {variant.title !== "Default Title" && (
+              <span className="num text-subtle"> · {variant.title}</span>
+            )}
+          </p>
+        </div>
         {/* DESKTOP ONLY (user, 2026-08-15). On a phone this figure was taking half the bar and
             squeezing the primary action down to a 128px "Add" -- the page's most important control,
             at its smallest, on the screen size where thumbs are the input. The price is not lost:
@@ -697,8 +740,15 @@ export default function ProductPage({ product, reviews }) {
           )}
         </div>
 
-        {/* Ask-a-human, kept out of the primary button's way. WhatsApp's own green, because a
-            recognised logo in the wrong colour reads as a copy of itself. */}
+        {/* ASK AND BUY ARE ONE GROUP, at gap-3 rather than the row's gap-8 (user, 2026-09-05).
+            Every child sat at the same 32px, so the WhatsApp square floated midway between the price
+            and the button and read as a third, unrelated item. Two controls that answer the same
+            question -- "I want this" / "I have a question about this" -- belong at arm's length from
+            each other and a full gap away from the figures they act on.
+
+            The group keeps the phone layout intact: flex-1 here with flex-1 on the button inside is
+            the same full-width Add it always was, with the icon beside it. */}
+        <div className="flex min-w-0 flex-1 items-center gap-3 lg:flex-none">
         {askLink && (
           <a
             href={askLink}
@@ -720,6 +770,7 @@ export default function ProductPage({ product, reviews }) {
             that opens a configuration panel was the least informative label on the page. */}
         <div className="min-w-0 flex-1 lg:w-52 lg:flex-none">
           <AddButton inStock={variant.inStock} onClick={() => setSheetOpen(true)} />
+        </div>
         </div>
       </div>
 

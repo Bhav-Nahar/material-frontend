@@ -271,11 +271,19 @@ export function summarize(reviews) {
       // an order was matched -- printing a "Verified purchase" badge against any other value would
       // be putting the shop's word behind something judge.me did not say.
       verified: r.verified === "buyer",
-      // Sizes vary by upload; compact is the thumbnail. Plain URLs, rendered by a plain <img> --
-      // next/image runs a custom Shopify loader here (next.config.mjs) that would append Shopify's
-      // resize params to a judge.me URL and get a 404.
+      // BOTH SIZES, because the two places these appear want different ones (user, 2026-09-05).
+      // `compact` is judge.me's thumbnail -- right for an 80px tile in the strip, and far too small
+      // for the overlay, where it was painting a ~170px snapshot into a 660px panel and had nothing
+      // to scale up into. `original` is what the buyer uploaded. Falling back to whichever exists
+      // means a picture with only one size still works in both places.
+      //
+      // Plain URLs for a plain <img> -- next/image runs a custom Shopify loader here
+      // (next.config.mjs) that would append Shopify's resize params to a judge.me URL and 404.
       photos: (r.pictures ?? [])
-        .map((p) => p?.urls?.compact || p?.urls?.original || null)
+        .map((p) => {
+          const thumb = p?.urls?.compact || p?.urls?.original || null;
+          return thumb ? { thumb, full: p?.urls?.original || thumb } : null;
+        })
         .filter(Boolean),
     }));
 

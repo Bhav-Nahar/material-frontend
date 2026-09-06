@@ -74,10 +74,13 @@
    <style jsx global> block in two separate files for exactly this.
 
    :root:root, NOT :root. swiper/css declares `:root { --swiper-theme-color: #007aff }` itself, and
-   it is imported by the components (ProductRail, ProductCard, HeroBanner…), so it lands AFTER this
-   file in the bundle -- equal specificity, later wins, and every progress bar on the site rendered
-   iOS blue. Doubling the pseudo-class outranks it whatever the import order, which is the same
-   trick the .rail-presize rule below uses and for the same reason. */
+   it is imported by the components (ProductCard, HeroBanner), so it lands AFTER this file in the
+   bundle -- equal specificity, later wins, and every progress bar on the site rendered iOS blue.
+   Doubling the pseudo-class outranks it whatever the import order.
+
+   ProductRail is no longer in that list: it is native scroll-snap now and its progress track is a
+   div this file styles directly. ProductCard's per-card image pagination is what still needs
+   this. */
 :root:root {
   --swiper-theme-color: var(--charcoal);
 }
@@ -206,7 +209,7 @@
 
   /* IN-PAGE ANCHORS GLIDE, they do not teleport.
 
-     The PDP's rating pill and "Write a review" are `href="#reviews"`, and the section is five
+     The PDP's rating pill is `href="#reviews"`, and the section is five
      screens down -- a native jump lands there with no sense of having travelled, so it reads as the
      page having replaced itself rather than scrolled. The targets already carry `scroll-mt-*` to
      clear the sticky header; this is the other half.
@@ -303,30 +306,6 @@
   &::-webkit-scrollbar { display: none; }
 }
 
-/* PRE-INIT RAIL SLIDE WIDTHS.
-
-   swiper/css ships `.swiper-slide { width: 100% }`. Between first paint and
-   Swiper's init every card in a rail therefore renders at full container width
-   -- one enormous tile that snaps down to four. It is the homepage's whole CLS
-   score, and it is worst on a back-navigation, where the markup is restored
-   from cache and the init runs again.
-
-   These mirror ProductRail's own breakpoints (2.15 / 3 / 4 slides). Two class
-   levels, so it beats swiper/css's single class WHATEVER order the two sheets
-   land in -- ProductRail imports swiper/css itself, so that order is not ours
-   to guarantee. Swiper writes INLINE widths on init and inline still wins, so
-   this stops mattering the moment the rail is live.
-
-   Plain CSS rather than a Tailwind arbitrary variant: `[&_.swiper-slide]:w-[44%]`
-   was silently not generated, which is a hard failure to see -- the class sits
-   in the markup with no rule behind it.
-
-   The calc is Swiper's own sizing formula -- (track - gaps) / slidesPerView --
-   so the pre-init width is the post-init width and the shift is zero rather
-   than merely small. A flat percentage left ~9px of it at 1440. */
-.rail-presize .swiper-slide { width: calc((100% - 13.8px) / 2.15); }   /* 2.15 @ 12px */
-@media (min-width: 768px) { .rail-presize .swiper-slide { width: calc((100% - 32px) / 3); } }
-@media (min-width: 1280px) { .rail-presize .swiper-slide { width: calc((100% - 72px) / 4); } }
 
 /* The one shadow §06 permits: a modal, drawer or dropdown lifted above what it
    covers. Everything else separates with a hairline. */
