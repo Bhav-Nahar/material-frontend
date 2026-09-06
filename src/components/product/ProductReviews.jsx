@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import Stars from "./Stars";
 import ReviewForm from "./ReviewForm";
 import ReviewList from "./ReviewList";
+import ReviewPhotos from "./ReviewPhotos";
 import { jumpTo } from "@/utils/jumpTo";
 
 /**
@@ -151,12 +152,14 @@ const PHOTO_STRIP = 6;
  * else's lighting. Those pictures already existed in this data; they were just buried one review
  * deep, where the shopper has to read three opinions to find the second photograph.
  *
- * ponytail: no lightbox. Each thumbnail opens the full image in a tab, which is what a browser is
- * for, and the "+N" tile is an anchor into the list where the rest live with their reviews. A modal
- * gallery with keyboard paging and focus trapping is a component; this is an <a>.
+ * The thumbnails open the product gallery's own lightbox -- see ReviewPhotos for why the tab this
+ * used to open was the wrong answer. The "+N" tile still is not a photograph: the rest are attached
+ * to reviews and the useful thing to do with them is read what the person said, so it stays an
+ * anchor into the list.
  */
 function CustomerPhotos({ reviews }) {
-  const photos = reviews.flatMap((r) => r.photos);
+  // Each photograph keeps the review it came from -- that pairing is what the overlay shows.
+  const photos = reviews.flatMap((r) => r.photos.map((photo) => ({ ...photo, review: r })));
   if (photos.length === 0) return null;
 
   const strip = photos.slice(0, PHOTO_STRIP);
@@ -168,37 +171,17 @@ function CustomerPhotos({ reviews }) {
         Photos from buyers <span className="num text-subtle">({photos.length})</span>
       </p>
       <div className="mt-2.5 flex flex-wrap gap-2">
-        {strip.map((src, i) => (
-          <a
-            key={`${src}-${i}`}
-            href={src}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- next/image runs the Shopify
-                CDN loader here (next.config.mjs) and would 404 on a judge.me URL. These are
-                already thumbnails. Same call as the per-review photos in ReviewList. */}
-            <img
-              src={src}
-              alt=""
-              loading="lazy"
-              className="h-20 w-20 rounded-sm border border-line object-cover transition-opacity hover:opacity-90"
-            />
-          </a>
-        ))}
-        {hidden > 0 && (
-          // Not a seventh photo -- the rest are attached to reviews, and the useful thing to do
-          // with them is read what the person said, so this lands in the list rather than opening
-          // an image.
-          <a
-            href="#reviews"
-            onClick={jumpTo("reviews")}
-            className="num flex h-20 w-20 items-center justify-center rounded-sm border border-line bg-surface text-sm font-medium text-subtle transition-colors hover:border-line-strong"
-          >
-            +{hidden}
-          </a>
-        )}
+        <ReviewPhotos items={strip}>
+          {hidden > 0 && (
+            <a
+              href="#reviews"
+              onClick={jumpTo("reviews")}
+              className="num flex h-20 w-20 items-center justify-center rounded-sm border border-line bg-surface text-sm font-medium text-subtle transition-colors hover:border-line-strong"
+            >
+              +{hidden}
+            </a>
+          )}
+        </ReviewPhotos>
       </div>
     </div>
   );

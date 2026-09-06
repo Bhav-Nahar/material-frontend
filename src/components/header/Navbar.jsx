@@ -66,13 +66,14 @@ export default function Navbar({ hideTop, menuData }) {
     <nav className="relative bg-white border-b border-gray-100 z-[90]">
       <div className="container-main relative flex items-center min-h-[40px] justify-center">
         {/* Sticky Logo - Absolute positioned to align with main logo */}
-        <div className="absolute left-4 lg:left-17 top-1/2 -translate-y-1/2">
+        {/* ponytail: matches container-main's own clamp gutter, not the jewelry build's flat
+            68px -- the two wordmarks cross-fade, so any x mismatch reads as a flicker. */}
+        <div className="absolute left-[clamp(1rem,3vw,2.5rem)] top-1/2 -translate-y-1/2">
+          {/* ponytail: opacity only. The scale ramp moved the mark ~14px sideways while
+              MainHeader's copy was still fading out, so the two read as two logos. */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{
-              opacity: hideTop ? 1 : 0,
-              scale: hideTop ? 1 : 0.8,
-            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: hideTop ? 1 : 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className={cn(
               "overflow-hidden flex-shrink-0",

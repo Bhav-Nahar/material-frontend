@@ -1,6 +1,6 @@
 "use client";
 
-import { formatPrice } from "@/utils/formatPrice";
+import { variantLine } from "@/lib/variantLines";
 
 /**
  * One button per VARIANT, not a picker per option.
@@ -9,9 +9,9 @@ import { formatPrice } from "@/utils/formatPrice";
  * "1200 × 200 mm / Honey" once there are two), so this reads correctly however many options a
  * product grows, and it cannot offer a combination that does not exist.
  *
- * Each button carries the two numbers that actually differ between sizes -- the rate and the
- * coverage -- which is the job Material Depot's photographed colour drawer does for colourways,
- * and the reason we do not need the drawer.
+ * Each button carries the title, and a coverage line only when the variants disagree about it --
+ * no price. See variantLines, which owns that rule, records what dropping the rate gives up, and is
+ * tested on both halves including the uniform case a browser cannot show us.
  *
  * Extracted from the buy box because the buy SHEET needs the identical control: someone who opens
  * the sheet from the pinned bar is past the buy box and must still be able to change size without
@@ -41,11 +41,13 @@ export default function VariantOptions({ product, variant, onChoose, columns = 2
             }`}
           >
             <span className="block text-sm text-ink">{v.title}</span>
-            <span className="num mt-0.5 block text-[11px] text-subtle">
-              {v.perSqFt > 0
-                ? `₹${formatPrice(v.perSqFt)}/sq ft · ${v.coverage} sq ft/${v.packUnit}`
-                : `₹${formatPrice(v.price)}/${v.packUnit}`}
-            </span>
+            {/* Empty when the variants agree on every number -- the button closes up rather than
+                reserving a blank row. */}
+            {variantLine(product.variants, v) && (
+              <span className="num mt-0.5 block text-[11px] text-subtle">
+                {variantLine(product.variants, v)}
+              </span>
+            )}
           </button>
         ))}
       </div>

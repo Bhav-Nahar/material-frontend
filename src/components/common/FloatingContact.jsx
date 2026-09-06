@@ -4,6 +4,7 @@ import { Phone } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { FOOTER_CONTACT, WHATSAPP_NUMBER } from "@/data/footer";
+import BackToTop from "./BackToTop";
 import WhatsappIcon from "./WhatsappIcon";
 
 /**
@@ -37,6 +38,11 @@ export default function FloatingContact() {
       data-floating-contact
       className="fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 flex flex-col gap-3 lg:right-6 lg:bottom-6"
     >
+      {/* TOP OF THE STACK, and only while the page is being scrolled up -- see BackToTop. It sits
+          above the contact buttons because it is the transient one: the two below it are always
+          there, and a control that comes and goes must not push the ones that do not. */}
+      <BackToTop />
+
       {/* CALL stays on every page -- the PDP has no other phone entry point. Only WhatsApp drops. */}
       {!onProduct && (
         <a

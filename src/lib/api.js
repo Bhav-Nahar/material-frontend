@@ -274,10 +274,18 @@ export const selectDefaultCustomerAddress = (addressId, accessToken) =>
     body: JSON.stringify({ addressId, mode: "default" }),
   });
 
+/**
+ * IN THE BODY, NOT THE QUERY STRING -- see addressKey at the top of this file. The full gid is what
+ * Shopify's customerAddressDelete needs (the bare numeric key is not a valid `ID!`), and that gid
+ * carries the session's access token, so a query string would file a working customer token into
+ * the backend's access logs on every delete. Every sibling helper here already sends the id in the
+ * body; this one was the exception.
+ */
 export const deleteCustomerAddress = (addressId, accessToken) =>
-  apiFetch(`/api/customer/addresses?addressId=${encodeURIComponent(addressId)}`, {
+  apiFetch("/api/customer/addresses", {
     method: "DELETE",
     headers: accessToken ? { "Authorization": `Bearer ${accessToken}` } : {},
+    body: JSON.stringify({ addressId }),
   });
 
 export const fetchWishlistApi = (userId = "", sessionId = "") => {

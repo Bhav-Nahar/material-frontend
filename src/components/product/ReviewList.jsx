@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import ReviewPhotos from "./ReviewPhotos";
 import { BadgeCheck, ImageIcon, Star } from "lucide-react";
 
 import Stars from "./Stars";
@@ -190,23 +192,14 @@ function Review({ review }) {
           {/* Customer photographs -- for a tile the single most useful thing in a review, because a
               studio shot cannot show how a floor reads under someone's own lighting.
 
-              Plain <img>, not next/image: next.config.mjs points the image loader at Shopify's CDN
-              resizer, which would append Shopify's params to a judge.me URL and 404. These are
-              already thumbnails, so there is nothing for an optimiser to do. No lightbox -- the
-              full size opens in a tab, which is what a browser is for. */}
+              They open the product gallery's lightbox, paging across this review's own photographs
+              -- see ReviewPhotos. */}
           {review.photos.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {review.photos.map((src) => (
-                <a key={src} href={src} target="_blank" rel="noopener noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- see the note above */}
-                  <img
-                    src={src}
-                    alt=""
-                    loading="lazy"
-                    className="h-16 w-16 rounded-sm border border-line object-cover transition-opacity hover:opacity-90"
-                  />
-                </a>
-              ))}
+              <ReviewPhotos
+                items={review.photos.map((photo) => ({ ...photo, review }))}
+                size="h-16 w-16"
+              />
             </div>
           )}
         </div>

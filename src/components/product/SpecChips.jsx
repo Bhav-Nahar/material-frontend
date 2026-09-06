@@ -1,3 +1,5 @@
+import { specChips } from "@/lib/product";
+
 /**
  * The spec chips under the price, tinted by what KIND of fact each one is.
  *
@@ -22,6 +24,11 @@
  *
  * ponytail: a local map, not new tokens in globals.css. One surface uses these five washes; if a
  * second one ever does (collection-page facets are the likely candidate), move them there then.
+ *
+ * It takes `specs` and derives the chips itself. They used to arrive pre-built as `product.chips`,
+ * which meant the same five facts were serialised into every product payload twice -- once as
+ * `specs` for ProductInsights, once reshaped for this file. See specChips in lib/product, which is
+ * where the shaping lives now and where it is tested.
  */
 const TINT = {
   // what it looks like  -- clay            6.9:1
@@ -36,8 +43,9 @@ const TINT = {
   room: "border-[#e4ded5] bg-[#f1eee9] text-[#5f574e]",
 };
 
-export default function SpecChips({ chips }) {
-  if (!chips || chips.length === 0) return null;
+export default function SpecChips({ specs }) {
+  const chips = specChips(specs);
+  if (chips.length === 0) return null;
 
   return (
     <ul className="mt-4 flex flex-wrap gap-2">
