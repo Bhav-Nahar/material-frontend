@@ -71,7 +71,13 @@ const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID;
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en-IN" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    // suppressHydrationWarning: browser extensions (Scribe, Grammarly, password managers) stamp
+    // attributes on <html> before React hydrates. It silences attribute diffs on THIS element only.
+    <html
+      lang="en-IN"
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         {/* The container itself. Every event in lib/gtm.js pushes into window.dataLayer, which
             queues fine without this -- but nothing READS the queue until the container loads, so

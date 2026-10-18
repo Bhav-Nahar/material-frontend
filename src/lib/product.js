@@ -30,7 +30,8 @@ const PRODUCT_QUERY = `
       availableForSale
       seo { title description }
       featuredImage { url altText width height }
-      images(first: 12) { nodes { url altText width height } }
+      # 50, not 12: a product in several colours carries every colour's photos here.
+      images(first: 50) { nodes { url altText width height } }
       # The first collection a product sits in names the middle of the breadcrumb, the way
       # Material Depot's reads Home / Tiles / Subway & Backsplash.
       collections(first: 1) { nodes { title handle } }
@@ -51,6 +52,12 @@ const PRODUCT_QUERY = `
           pieces: metafield(namespace: "custom", key: "pieces_per_pack") { value }
           packUnit: metafield(namespace: "custom", key: "pack_unit") { value }
           thickness: metafield(namespace: "custom", key: "thickness_mm") { value }
+          coveragePerPack: metafield(namespace: "custom", key: "coverage_per_pack") { value }
+          # This colour's photos, written by material-admin. A variant's own "image" is ONE photo;
+          # this is the gallery the PDP swaps to when the colour is chosen.
+          gallery: metafield(namespace: "custom", key: "variant_images") {
+            references(first: 20) { nodes { ... on MediaImage { image { url altText width height } } } }
+          }
         }
       }
       finish: metafield(namespace: "custom", key: "finish") { value }
@@ -61,6 +68,10 @@ const PRODUCT_QUERY = `
       installation: metafield(namespace: "custom", key: "installation_guide") { value }
       care: metafield(namespace: "custom", key: "care_maintenance") { value }
       samplePrice: metafield(namespace: "custom", key: "sample_price") { value }
+      features: metafield(namespace: "custom", key: "features") { value }
+      flexibility: metafield(namespace: "custom", key: "flexibility") { value }
+      importantNote: metafield(namespace: "custom", key: "install_caveats") { value }
+      colourFamily: metafield(namespace: "custom", key: "colour_family") { value }
     }
   }
 `;
@@ -144,9 +155,8 @@ export function specChips(specs) {
     specs.material && { label: specs.material, kind: "material" },
     specs.finish && { label: `${specs.finish} finish`, kind: "finish" },
     specs.slipRating && { label: `Slip ${specs.slipRating}`, kind: "slip" },
-    // Rooms last, and tagged as one kind however many there are -- they are a different sort of
-    // fact from the four above (where it goes, not what it is), and SpecChips colours them apart.
-    ...(specs.application ?? []).map((room) => ({ label: room, kind: "room" })),
+    // No rooms: they are shown once, with icons, under "Where it works" in ProductInsights. The
+    // chips are the at-a-glance summary beside the price -- what it IS, not where it goes.
   ].filter(Boolean);
 }
 
@@ -200,8 +210,8 @@ function mapProduct(p) {
     seo: p.seo ?? {},
     media,
     collection,
-    // Shopify allows several; the PDP renders each as its own row of choices, so a product with a
-    // Size AND a Colour option needs no code change.
+    // Only options with a real choice. One option renders as one row of variant buttons; two or
+    // more (Size AND Colour) render a row per option -- see VariantOptions.
     options: (p.options ?? []).filter((o) => o.optionValues?.length > 1),
     variants,
     specs: {
@@ -210,6 +220,10 @@ function mapProduct(p) {
       look: p.look?.value ?? null,
       slipRating: p.slipRating?.value ?? null,
       application: safeList(p.application?.value),
+      features: safeList(p.features?.value),
+      flexibility: p.flexibility?.value ?? null,
+      importantNote: safeList(p.importantNote?.value),
+      colourFamily: safeList(p.colourFamily?.value),
     },
     // Multi-line text metafields, split into the lines the admin typed. Rendered as a list; the
     // field carries no markup and is not run through dangerouslySetInnerHTML.
@@ -252,7 +266,55 @@ function mapVariant(v) {
     pieces: Number(v.pieces?.value ?? 0) || null,
     packUnit: v.packUnit?.value || "box",
     thickness: v.thickness?.value ? Number(v.thickness.value) : null,
+    // Stored per pack, for products not sold per sq ft (panels, laminates) whose "coverage" is 0.
+    coveragePerPack: Number(v.coveragePerPack?.value ?? 0) || null,
+    gallery: (v.gallery?.references?.nodes ?? []).map((n) => n.image).filter(Boolean),
   };
+}
+
+/* ------------------------------------------------------------ options and specs */
+
+/**
+ * The variant a shopper means when they change ONE option: same choices otherwise, this one value
+ * swapped. Falls back to any variant with that value (the combination may not be stocked), then
+ * stays put.
+ */
+export function pickVariant(variants, current, name, value) {
+  const want = { ...current.options, [name]: value };
+  return (
+    variants.find((v) => Object.entries(want).every(([k, x]) => v.options[k] === x)) ??
+    variants.find((v) => v.options[name] === value) ??
+    current
+  );
+}
+
+/** "Size: 2440 x 1220 mm, Colour: Walnut" -- for messages, where a bare variant title is ambiguous. */
+export function optionText(product, variant) {
+  const parts = product.options.map((o) => `${o.name}: ${variant.options[o.name]}`);
+  if (parts.length) return parts.join(", ");
+  return variant.title !== "Default Title" ? `Size: ${variant.title}` : "";
+}
+
+/**
+ * The spec facts ProductInsights groups under "How it looks" and "Will it fit", in the catalogue
+ * team's order, following the selected variant. Features, rooms and the note are NOT rows -- the
+ * insights block gives each its own band. Empty rows are dropped.
+ */
+export function specRows(product, variant) {
+  const s = product.specs;
+  const coverage = variant.coverage || variant.coveragePerPack;
+  return [
+    // "Colour" from material-admin, "Color" on products made in Shopify admin -- either spelling.
+    ["Colour", variant.options[Object.keys(variant.options).find((k) => /^colou?r$/i.test(k))] ?? s.colourFamily.join(", ")],
+    ["Look", s.look],
+    ["Finish", s.finish],
+    ["Material", s.material],
+    ["Size", variant.options.Size ?? (variant.title !== "Default Title" ? variant.title : null)],
+    ["Thickness", variant.thickness && `${variant.thickness} mm`],
+    ["Coverage area", coverage && `${coverage} sq ft / ${variant.packUnit}`],
+    ["Flexibility", s.flexibility],
+    ["Slip rating", s.slipRating],
+  ].filter(([, v]) => v);
 }
 
 /**

@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { variantLine } from "@/lib/variantLines";
+import { pickVariant } from "@/lib/product";
 
 /**
  * One button per VARIANT, not a picker per option.
@@ -19,6 +21,7 @@ import { variantLine } from "@/lib/variantLines";
  */
 export default function VariantOptions({ product, variant, onChoose, columns = 2 }) {
   if (product.variants.length < 2) return null;
+  if (product.options.length > 1) return <OptionRows product={product} variant={variant} onChoose={onChoose} />;
 
   return (
     <fieldset>
@@ -52,5 +55,61 @@ export default function VariantOptions({ product, variant, onChoose, columns = 2
         ))}
       </div>
     </fieldset>
+  );
+}
+
+/**
+ * A row PER OPTION, once a product has two (Size and Colour). One button per variant stopped
+ * working there: 3 sizes x 4 colours is twelve buttons reading "2440 x 1220 mm / Walnut", and
+ * the shopper choosing a colour has to read every size to find it.
+ *
+ * A value with no stocked combination for the current other choices is still offered -- picking it
+ * moves to the nearest variant that has it (pickVariant) rather than leaving a dead button.
+ * Colour buttons carry that colour's photo, so the row reads as swatches.
+ */
+function OptionRows({ product, variant, onChoose }) {
+  return (
+    <div className="space-y-4">
+      {product.options.map((o) => {
+        const isColour = /colou?r/i.test(o.name);
+        return (
+          <fieldset key={o.name}>
+            <legend className="text-xs font-medium text-ink">
+              {o.name}
+              <span className="ml-1.5 font-normal text-subtle">{variant.options[o.name]}</span>
+            </legend>
+            <div className="mt-2.5 flex flex-wrap gap-2.5">
+              {o.optionValues.map(({ name }) => {
+                const target = pickVariant(product.variants, variant, o.name, name);
+                const on = variant.options[o.name] === name;
+                const swatch = isColour && product.variants.find((v) => v.options[o.name] === name)?.image;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => onChoose(target)}
+                    aria-pressed={on}
+                    className={`flex cursor-pointer items-center gap-2 rounded-sm border px-3 py-2 text-left text-sm text-ink transition-colors ${
+                      on ? "border-ink bg-surface" : "border-line bg-surface hover:border-line-strong"
+                    }`}
+                  >
+                    {swatch && (
+                      <Image
+                        src={swatch}
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="h-7 w-7 shrink-0 rounded-full object-cover"
+                      />
+                    )}
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        );
+      })}
+    </div>
   );
 }
