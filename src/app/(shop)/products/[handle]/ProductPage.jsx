@@ -29,7 +29,7 @@ import {
   pushProductView,
   pushRemoveFromWishlist,
 } from "@/lib/gtm";
-import { areaForBoxes, boxesForArea } from "@/lib/product";
+import { areaForBoxes, boxesForArea, optionText } from "@/lib/product";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import { WHATSAPP_NUMBER } from "@/data/footer";
 import { formatPrice } from "@/utils/formatPrice";
@@ -319,7 +319,7 @@ export default function ProductPage({ product, reviews }) {
     WHATSAPP_NUMBER &&
     buildWhatsappLink(WHATSAPP_NUMBER, [
       `Hi Material, I'd like a sample of ${product.title}`,
-      `Size: ${variant.title}`,
+      optionText(product, variant),
       variant.sku && `Code: ${variant.sku}`,
       `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/products/${product.handle}`,
     ]);
@@ -331,7 +331,7 @@ export default function ProductPage({ product, reviews }) {
     WHATSAPP_NUMBER &&
     buildWhatsappLink(WHATSAPP_NUMBER, [
       `Hi Material, I have a question about ${product.title}`,
-      `Size: ${variant.title}`,
+      optionText(product, variant),
       `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/products/${product.handle}`,
     ]);
 
@@ -368,8 +368,12 @@ export default function ProductPage({ product, reviews }) {
         {hasMedia && (
           <div className="lg:col-span-7">
             {/* The mosaic pins itself against the header -- see ProductGallery. */}
+            {/* The chosen colour's photos only, when it has its own (variant_images); keyed on
+                that set so the gallery starts again at its first photo when the colour changes,
+                and does not when only the size does. */}
             <ProductGallery
-              images={product.media}
+              key={variant.gallery[0]?.url ?? "all"}
+              images={variant.gallery.length ? variant.gallery : product.media}
               title={product.title}
               tag={product.tags[0]}
               wishlisted={wishlisted}

@@ -195,8 +195,6 @@ test("every set field becomes one chip, tagged with the field it came from", () 
     { label: "Vitrified", kind: "material" },
     { label: "Matte finish", kind: "finish" },
     { label: "Slip R10", kind: "slip" },
-    { label: "Living room", kind: "room" },
-    { label: "Bedroom", kind: "room" },
   ]);
 });
 
@@ -212,8 +210,41 @@ test("no specs at all is an empty row, not a crash", () => {
   assert.deepEqual(specChips({ application: [] }), []);
 });
 
-test("rooms all share one kind however many there are", () => {
-  const rooms = specChips({ application: ["Kitchen", "Bath", "Balcony"] });
-  assert.equal(rooms.length, 3);
-  assert.ok(rooms.every((c) => c.kind === "room"));
+test("rooms are not chips -- ProductInsights shows them once, under Where it works", () => {
+  assert.deepEqual(specChips({ application: ["Kitchen", "Bath", "Balcony"] }), []);
+});
+
+import { pickVariant, optionText, specRows } from "./product.js";
+
+const V = (Size, Colour, extra = {}) => ({
+  id: `${Size}/${Colour}`, title: `${Size} / ${Colour}`, options: { Size, Colour },
+  thickness: 1, coverage: 0, coveragePerPack: 32, packUnit: "sheet", ...extra,
+});
+
+test("pickVariant swaps one option and keeps the other, falling back when the pair is not stocked", () => {
+  const vs = [V("8x4", "Walnut"), V("8x4", "Ivory"), V("10x4", "Walnut")];
+  assert.equal(pickVariant(vs, vs[0], "Colour", "Ivory").id, "8x4/Ivory");
+  assert.equal(pickVariant(vs, vs[1], "Size", "10x4").id, "10x4/Walnut", "10x4 has no Ivory");
+  assert.equal(pickVariant(vs, vs[0], "Colour", "Nope").id, "8x4/Walnut");
+});
+
+test("optionText names each option; a lone untitled variant says nothing", () => {
+  const product = { options: [{ name: "Size" }, { name: "Colour" }] };
+  assert.equal(optionText(product, V("8x4", "Walnut")), "Size: 8x4, Colour: Walnut");
+  assert.equal(optionText({ options: [] }, { title: "Default Title", options: {} }), "");
+});
+
+test("specRows: look facts then fit facts, following the variant, empty rows dropped", () => {
+  const product = {
+    specs: {
+      finish: "Textured", look: "Leather", material: null, application: ["TV Unit"], features: ["Light Weight"],
+      flexibility: null, importantNote: [], colourFamily: [], slipRating: null,
+    },
+  };
+  const rows = specRows(product, V("8x4", "Walnut"));
+  assert.deepEqual(rows.map(([k]) => k), ["Colour", "Look", "Finish", "Size", "Thickness", "Coverage area"]);
+  assert.equal(rows[0][1], "Walnut");
+  assert.equal(rows.find(([k]) => k === "Coverage area")[1], "32 sq ft / sheet");
+  // Shopify-admin products spell the option "Color".
+  assert.equal(specRows(product, { ...V("8x4", "x"), options: { Size: "8x4", Color: "Ivory" } })[0][1], "Ivory");
 });
