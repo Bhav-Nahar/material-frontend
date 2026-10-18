@@ -120,7 +120,15 @@ export async function predictiveSearch(term, limit = 6) {
 
   // 5 minutes, not the 24 hours the shelves use: a shopper who searches for the product that was
   // added this morning should find it today.
-  const data = await storefront("predictiveSearch", PREDICTIVE_SEARCH, { q: query, limit }, 300);
+  // Shopify caps predictiveSearch at 10 per type and REJECTS anything higher ("limit must be
+  // within 1..10") -- the whole call fails, which /search rendered as "Nothing matched" for every
+  // term while the header dropdown (limit 6) kept working. Clamped here so no caller can trip it.
+  const data = await storefront(
+    "predictiveSearch",
+    PREDICTIVE_SEARCH,
+    { q: query, limit: Math.min(Math.max(1, limit), 10) },
+    300,
+  );
   const found = data?.predictiveSearch;
   if (!found) return null;
 
@@ -134,6 +142,48 @@ export async function predictiveSearch(term, limit = 6) {
     pages: found.pages ?? [],
   };
 }
+
+/**
+ * Full search, for the /search results page: every matching product, a page at a time.
+ *
+ * predictiveSearch above is for the header dropdown -- fast, typo-tolerant, but capped at 10 per
+ * type. Shopify's search() has no such cap, reports the total, and pages by cursor, so pressing
+ * Enter shows everything that matched rather than the first ten. Same PRODUCT_FIELDS and
+ * mapProducts, so a result card and a shelf card cannot disagree.
+ *
+ * `unavailableProducts: LAST` keeps sellable products first without hiding the rest.
+ *
+ * Every page MUST use the same `first`: Shopify's search cursors are tied to the page size they
+ * came from -- measured, a cursor from a first:5 page returns NOTHING when asked for first:24. The
+ * /search page and /api/search both take the default, which is what keeps them in step.
+ */
+export async function searchProducts(term, { first = 24, after = null } = {}) {
+  const query = String(term || "").trim();
+  if (query.length < 2) return null;
+  const data = await storefront("searchProducts", SEARCH_PRODUCTS, { q: query, first, after }, 300);
+  const found = data?.search;
+  if (!found) return null;
+  return {
+    total: found.totalCount ?? 0,
+    products: await attachRatings(mapProducts(found.nodes.filter((n) => n?.handle))),
+    // Same shape the collection page scrolls on: { hasNextPage, endCursor }.
+    pageInfo: found.pageInfo ?? { hasNextPage: false, endCursor: null },
+  };
+}
+
+const SEARCH_PRODUCTS = `
+  query SearchProducts($q: String!, $first: Int!, $after: String) {
+    search(query: $q, first: $first, after: $after, types: [PRODUCT], unavailableProducts: LAST) {
+      totalCount
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        ... on Product {
+          ${PRODUCT_FIELDS}
+        }
+      }
+    }
+  }
+`;
 
 const PREDICTIVE_SEARCH = `
   query PredictiveSearch($q: String!, $limit: Int!) {

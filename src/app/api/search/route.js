@@ -1,4 +1,4 @@
-import { predictiveSearch } from "@/lib/products";
+import { predictiveSearch, searchProducts } from "@/lib/products";
 
 /**
  * The header search box's endpoint.
@@ -16,6 +16,13 @@ import { predictiveSearch } from "@/lib/products";
  */
 export async function GET(request) {
   const query = request.nextUrl.searchParams.get("q") ?? "";
+  const cursor = request.nextUrl.searchParams.get("cursor");
+  // The /search page's scroll-to-load: the next page of full-search products, ProductCard-shaped.
+  if (cursor) {
+    const page = await searchProducts(query, { after: cursor });
+    if (!page) return Response.json({ products: [], pageInfo: null }, { status: 502 });
+    return Response.json({ products: page.products, pageInfo: page.pageInfo });
+  }
   if (String(query).trim().length < 2) return Response.json({ results: [] });
   const found = await predictiveSearch(query);
   // null here is "Shopify unreachable", not "no matches" -- a 502 lets the header say search is
