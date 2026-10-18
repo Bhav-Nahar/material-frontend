@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { BookOpen, FileText, SearchX } from "lucide-react";
 
-import ProductCard from "@/components/product/ProductCard";
-import { predictiveSearch } from "@/lib/products";
+import SearchResults from "./SearchResults";
+import { predictiveSearch, searchProducts } from "@/lib/products";
 
 /**
  * Full search results — the page Enter and "View All Results" land on.
@@ -10,11 +10,11 @@ import { predictiveSearch } from "@/lib/products";
  * BOTH HEADERS ALREADY LINKED HERE; the route did not exist, so the single most common search
  * gesture (type, press Enter) 404'd sitewide. This page is that missing landing.
  *
- * ponytail: one predictiveSearch call with a higher per-type limit, not Shopify's paginated
- * search() connection. Predictive search carries the Search & Discovery app's synonyms and rules,
- * returns products/collections/articles/pages in ONE request, and its products come through
- * mapProducts — so a result card and a shelf card can never disagree. Move to search() with
- * pagination when the catalogue outgrows 20 results a term.
+ * PRODUCTS come from Shopify's full search() -- every match, 24 a page, more loading as you
+ * scroll exactly as a collection page does (SearchResults). It used to be predictiveSearch, which Shopify caps at 10 per type; asking it for 20
+ * failed the whole call and the page said "Nothing matched" for every term (2026-10-19).
+ * Collections and guides still come from predictiveSearch: there are only ever a few, and it is
+ * the call that returns them.
  */
 
 export const revalidate = 300;
@@ -31,9 +31,10 @@ export async function generateMetadata({ searchParams }) {
 export default async function SearchPage({ searchParams }) {
   const { q = "" } = await searchParams;
   const query = String(q).trim();
-  const found = query.length >= 2 ? await predictiveSearch(query, 20) : null;
+  const [found, full] =
+    query.length >= 2 ? await Promise.all([predictiveSearch(query, 10), searchProducts(query)]) : [null, null];
 
-  const products = found?.products ?? [];
+  const products = full?.products ?? [];
   const collections = found?.collections ?? [];
   const content = [
     ...(found?.articles ?? []).map((a) => ({ ...a, href: `/blog/${a.handle}`, kind: "Guide" })),
@@ -52,6 +53,11 @@ export default async function SearchPage({ searchParams }) {
           "Search"
         )}
       </h1>
+      {full?.total > 0 && (
+        <p className="num mt-1.5 text-sm text-subtle">
+          {full.total} product{full.total === 1 ? "" : "s"}
+        </p>
+      )}
 
       {/* Collections first — a shopper typing "marble" most wants the marble shelf, not six
           individual boxes of it. Same ordering as the header popup. */}
@@ -70,19 +76,7 @@ export default async function SearchPage({ searchParams }) {
         </ul>
       )}
 
-      {products.length > 0 && (
-        <div className="mt-7 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3 lg:gap-x-6 xl:grid-cols-4">
-          {products.map((product, i) => (
-            <ProductCard
-              key={product.handle}
-              product={product}
-              priority={i < 4}
-              list="search"
-              index={i}
-            />
-          ))}
-        </div>
-      )}
+      <SearchResults key={query} query={query} products={products} pageInfo={full?.pageInfo ?? null} />
 
       {content.length > 0 && (
         <section className="mt-10">
