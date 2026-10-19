@@ -2,7 +2,7 @@
 // collection.test.mjs run under plain `node --test` with no config.
 import { PRODUCT_FIELDS, mapProducts, storefront } from "./products.js";
 import { attachRatings } from "./reviews.js";
-import { SORTS } from "./sorts.js";
+import { SEARCH_SORTS, SORTS } from "./sorts.js";
 
 /**
  * The collection page's data layer.
@@ -214,6 +214,96 @@ export async function getCollection({
     totalCount: totalFrom(page.filters),
   };
 }
+
+/**
+ * Full search for /search -- the collection page's data, for a search term instead of a handle.
+ *
+ * Same URL params (readFilters), same facets (cleanFacet), same page size and product shape, so
+ * /search renders through CollectionPage itself: sidebar, mobile filter sheet, chips, price
+ * slider, counts and scroll-to-load are the collection page's own, not a second copy.
+ *
+ * It replaced predictiveSearch on /search (2026-10-19): that is capped at 10 per type, and asking
+ * it for 20 failed the whole call, so every search said "Nothing matched".
+ *
+ * Every page MUST use the same `first`: Shopify's search cursors are tied to the page size they
+ * came from -- measured, a cursor from a first:5 page returns NOTHING when asked for first:24.
+ * /search and /api/search both take PAGE_SIZE, which is what keeps them in step.
+ *
+ * ponytail: the readable `?look=marble` params the menu uses are not resolved here (that costs a
+ * facets round trip, see resolveNamedFilters). Search URLs only ever carry the filter ids the
+ * sidebar writes.
+ */
+export async function getSearch({ query, search = "", cursor = null, withFacets = true }) {
+  const q = String(query || "").trim();
+  if (q.length < 2) return null;
+  const params = new URLSearchParams(search);
+  const sort = SEARCH_SORTS.find((s) => s.value === params.get("sort")) ?? SEARCH_SORTS[0];
+  const { filters } = readFilters(params);
+
+  // 5 minutes: a shopper searching for this morning's new product should find it today.
+  const data = await storefront(
+    "getSearch",
+    SEARCH_QUERY,
+    {
+      q,
+      first: PAGE_SIZE,
+      after: cursor,
+      sortKey: sort.key,
+      reverse: sort.reverse,
+      filters,
+      withFacets,
+    },
+    300,
+  );
+  const found = data?.search;
+  if (!found) return null;
+
+  return {
+    sort: sort.value,
+    products: await attachRatings(mapProducts(found.nodes.filter((n) => n?.handle))),
+    facets: (found.productFilters ?? []).map(cleanFacet).filter(Boolean),
+    pageInfo: found.pageInfo ?? { hasNextPage: false, endCursor: null },
+    // search() reports its own total, filters applied -- no need to add up facet counts.
+    totalCount: found.totalCount ?? null,
+  };
+}
+
+const SEARCH_QUERY = `
+  query Search(
+    $q: String!
+    $first: Int!
+    $after: String
+    $sortKey: SearchSortKeys!
+    $reverse: Boolean!
+    $filters: [ProductFilter!]
+    $withFacets: Boolean!
+  ) {
+    search(
+      query: $q
+      first: $first
+      after: $after
+      sortKey: $sortKey
+      reverse: $reverse
+      types: [PRODUCT]
+      productFilters: $filters
+      unavailableProducts: LAST
+    ) {
+      totalCount
+      productFilters @include(if: $withFacets) {
+        id
+        label
+        type
+        values { id label count input }
+      }
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        ... on Product {
+          ${PRODUCT_FIELDS}
+        }
+      }
+    }
+  }
+`;
 
 /**
  * Drops facets that cannot filter anything -- a group whose every value would return the same set

@@ -120,7 +120,15 @@ export async function predictiveSearch(term, limit = 6) {
 
   // 5 minutes, not the 24 hours the shelves use: a shopper who searches for the product that was
   // added this morning should find it today.
-  const data = await storefront("predictiveSearch", PREDICTIVE_SEARCH, { q: query, limit }, 300);
+  // Shopify caps predictiveSearch at 10 per type and REJECTS anything higher ("limit must be
+  // within 1..10") -- the whole call fails, which /search rendered as "Nothing matched" for every
+  // term while the header dropdown (limit 6) kept working. Clamped here so no caller can trip it.
+  const data = await storefront(
+    "predictiveSearch",
+    PREDICTIVE_SEARCH,
+    { q: query, limit: Math.min(Math.max(1, limit), 10) },
+    300,
+  );
   const found = data?.predictiveSearch;
   if (!found) return null;
 

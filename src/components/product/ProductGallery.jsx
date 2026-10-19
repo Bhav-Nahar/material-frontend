@@ -91,8 +91,8 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
    * They previously promoted the first image to a 4:3 hero to fill the odd row's spare cell, but a
    * hero declares one photograph the important one, and on a material that is a claim the catalogue
    * cannot make: the room shot and the plank detail are the comparison the shopper is running, and
-   * equal tiles are what let them run it. An odd count therefore leaves the last cell empty, which
-   * is the accepted cost.
+   * equal tiles are what let them run it. An odd count therefore leaves the last cell empty -- and
+   * since 2026-10-19 genuinely empty, with no border round it (see the mosaic's className).
    */
   const solo = images.length === 1;
 
@@ -155,7 +155,12 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
         // photographs ARE the surface: butted together they read as one continuous sheet of the
         // material, which is the thing being judged. The frame moves to the block -- one border and
         // one radius around the whole mosaic, with overflow-hidden so the corner tiles clip to it.
-        className="sticky hidden grid-cols-2 gap-0 overflow-hidden rounded-sm border border-line lg:grid"
+        //
+        // The hairline is now PER TILE, not one border round the block (user, 2026-10-19): with an
+        // odd count the block's border also boxed the empty last cell, drawing a frame round nothing.
+        // Each tile carries its own border and overlaps its neighbours by 1px (-ml-px/-mt-px,
+        // offset by pl-px/pt-px here), so shared edges stay ONE hairline and an empty cell has none.
+        className="sticky hidden grid-cols-2 gap-0 pl-px pt-px lg:grid"
       >
         {images.map((img, i) => (
           /*
@@ -167,7 +172,7 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
           */
           <div
             key={img.url}
-            className={`relative ${solo ? "col-span-2" : ""}`}
+            className={`relative -ml-px -mt-px border border-line ${solo ? "col-span-2" : ""}`}
           >
             <button
               type="button"

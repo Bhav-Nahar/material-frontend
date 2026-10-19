@@ -16,7 +16,7 @@ import {
   restoreListingScroll,
   savePlpState,
 } from "@/lib/plpScroll";
-import { SORTS, DEFAULT_SORT } from "@/lib/sorts";
+import { SORTS } from "@/lib/sorts";
 import { formatPrice } from "@/utils/formatPrice";
 
 /**
@@ -36,6 +36,11 @@ import { formatPrice } from "@/utils/formatPrice";
  * the jewelry build: on a phone the mega menu is three taps away, so the sheet that lets a shopper
  * jump to another category (or into a facet of this one) is doing navigation work the sidebar does
  * on desktop.
+ *
+ * ALSO THE SEARCH PAGE (2026-10-19). /search passes no handle, its own `sorts` (search can only
+ * sort by relevance and price), `apiPath="/api/search"` for scroll-to-load, a `list` name for
+ * analytics, and `intro` for the collection links above the grid. The search term rides in the URL
+ * as `q`, so every filter link, the next-page fetch and "Clear all" carry it like any other param.
  */
 export default function CollectionPage({
   handle,
@@ -46,7 +51,13 @@ export default function CollectionPage({
   pageInfo,
   totalCount,
   priorityCards = 4,
+  sorts = SORTS,
+  apiPath = "/api/collection",
+  list = `collection:${handle}`,
+  crumb = title,
+  intro = null,
 }) {
+  const DEFAULT_SORT = sorts[0].value;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -98,7 +109,12 @@ export default function CollectionPage({
     navigate(params);
   };
 
-  const clearAll = () => navigate(new URLSearchParams());
+  // Filters and sort go; the search term, on /search, stays -- clearing filters is not a new search.
+  const clearAll = () => {
+    const keep = new URLSearchParams();
+    if (searchParams.get("q")) keep.set("q", searchParams.get("q"));
+    navigate(keep);
+  };
 
   // Every applied facet, as chips. Read off the URL rather than tracked separately, so a shopper
   // who lands on a filtered link sees the same chips as one who clicked their way there.
@@ -140,9 +156,9 @@ export default function CollectionPage({
     setLoadingMore(true);
     try {
       const params = new URLSearchParams(searchParams);
-      params.set("handle", handle);
+      if (handle) params.set("handle", handle);
       params.set("cursor", page.endCursor);
-      const res = await fetch(`/api/collection?${params}`);
+      const res = await fetch(`${apiPath}?${params}`);
       const next = await res.json();
       if (next.products?.length) {
         setLoaded((prev) => [...prev, ...next.products]);
@@ -155,7 +171,7 @@ export default function CollectionPage({
       busy.current = false;
       setLoadingMore(false);
     }
-  }, [handle, page, searchParams]);
+  }, [apiPath, handle, page, searchParams]);
 
   /* -------------------------------------------------------------- coming back here */
 
@@ -188,9 +204,9 @@ export default function CollectionPage({
       try {
         for (let i = 0; i < wanted && next?.hasNextPage && !cancelled; i++) {
           const params = new URLSearchParams(searchParams);
-          params.set("handle", handle);
+          if (handle) params.set("handle", handle);
           params.set("cursor", next.endCursor);
-          const res = await fetch(`/api/collection?${params}`);
+          const res = await fetch(`${apiPath}?${params}`);
           const data = await res.json();
           if (cancelled) return;
           next = data.pageInfo ?? { hasNextPage: false, endCursor: null };
@@ -283,7 +299,7 @@ export default function CollectionPage({
             Home
           </Link>
           <span className="px-1.5 text-meta">/</span>
-          <span className="text-ink">{title}</span>
+          <span className="text-ink">{crumb}</span>
         </nav>
 
         <div className="flex items-baseline gap-3 border-b border-line pb-4">
@@ -292,6 +308,7 @@ export default function CollectionPage({
             {count} {count === 1 ? "product" : "products"}
           </span>
         </div>
+        {intro}
       </div>
 
       <div className="container-main mt-6 flex gap-10">
@@ -312,7 +329,7 @@ export default function CollectionPage({
             </div>
 
             {facets.length === 0 && (
-              <p className="py-4 text-xs text-subtle">No filters for this collection yet.</p>
+              <p className="py-4 text-xs text-subtle">No filters here yet.</p>
             )}
 
             {facets.map((facet) => {
@@ -380,7 +397,7 @@ export default function CollectionPage({
                   onChange={(e) => setSort(e.target.value)}
                   className="cursor-pointer appearance-none bg-transparent pr-5 text-sm text-ink focus:outline-none"
                 >
-                  {SORTS.map((option) => (
+                  {sorts.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -450,7 +467,7 @@ export default function CollectionPage({
                   key={`${product.handle}-${i}`}
                   product={product}
                   priority={i < priorityCards}
-                  list={`collection:${handle}`}
+                  list={list}
                   index={i}
                 />
               ))}
@@ -495,7 +512,7 @@ export default function CollectionPage({
 
       <BottomSheet open={sheet === "sort"} onClose={() => setSheet(null)} title="Sort by">
         <ul>
-          {SORTS.map((option) => (
+          {sorts.map((option) => (
             <li key={option.value}>
               <button
                 type="button"
@@ -542,7 +559,7 @@ export default function CollectionPage({
         }
       >
         {facets.length === 0 ? (
-          <p className="py-6 text-sm text-subtle">No filters for this collection yet.</p>
+          <p className="py-6 text-sm text-subtle">No filters here yet.</p>
         ) : (
           <div className="-mx-5 flex h-full">
             <ul className="w-2/5 shrink-0 overflow-y-auto border-r border-line bg-paper">
