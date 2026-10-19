@@ -248,3 +248,19 @@ test("specRows: look facts then fit facts, following the variant, empty rows dro
   // Shopify-admin products spell the option "Color".
   assert.equal(specRows(product, { ...V("8x4", "x"), options: { Size: "8x4", Color: "Ivory" } })[0][1], "Ivory");
 });
+
+import { mapProduct } from "./product.js";
+
+test("images no colour claims are shared: shown with every colour, after its own", () => {
+  const img = (n) => ({ url: `https://cdn/x/${n}.jpg?v=${n}`, altText: n });
+  const gallery = (...ns) => ({ references: { nodes: ns.map((n) => ({ image: { ...img(n), url: `https://cdn/x/${n}.jpg?v=other` } })) } });
+  const variant = (colour, g) => ({ id: colour, title: colour, selectedOptions: [{ name: "Colour", value: colour }], price: { amount: "1" }, gallery: g });
+  const p = mapProduct({
+    images: { nodes: ["a1", "a2", "b1", "later"].map(img) },
+    options: [],
+    variants: { nodes: [variant("A", gallery("a1", "a2")), variant("B", gallery("b1"))] },
+  });
+  const names = (v) => v.gallery.map((g) => g.altText);
+  assert.deepEqual(names(p.variants[0]), ["a1", "a2", "later"], "own first, then the unclaimed one");
+  assert.deepEqual(names(p.variants[1]), ["b1", "later"], "another colour's photos stay out");
+});

@@ -182,13 +182,22 @@ export function areaForBoxes(boxes, coverage) {
 
 /* ---------------------------------------------------------------------- mapping */
 
-function mapProduct(p) {
+export function mapProduct(p) {
   const variants = (p.variants?.nodes ?? []).map(mapVariant);
 
   // Featured image first, then the gallery, deduped by URL.
   const media = [p.featuredImage, ...(p.images?.nodes ?? [])]
     .filter(Boolean)
     .filter((img, i, all) => all.findIndex((o) => o.url === img.url) === i);
+
+  // Images no colour claims are SHARED: shown with every colour, after its own. variant_images is
+  // written when material-admin creates the product, so a photo added later in Shopify admin is
+  // in nobody's list -- without this it showed on no colour at all (headline-laminate, 2026-10-19:
+  // 7 images, 6 shown). Compared without the ?v= cache-buster, which can differ between the two.
+  const key = (img) => img.url.split("?")[0];
+  const claimed = new Set(variants.flatMap((v) => v.gallery.map(key)));
+  const shared = media.filter((img) => !claimed.has(key(img)));
+  for (const v of variants) if (v.gallery.length) v.gallery = [...v.gallery, ...shared];
 
   const collection = p.collections?.nodes?.[0] ?? null;
 
