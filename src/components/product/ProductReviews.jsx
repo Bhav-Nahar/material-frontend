@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
 
 import Stars from "./Stars";
-import ReviewForm from "./ReviewForm";
+import ReviewComposer from "./ReviewComposer";
 import ReviewList from "./ReviewList";
 import ReviewPhotos from "./ReviewPhotos";
 import { jumpTo } from "@/utils/jumpTo";
@@ -26,10 +26,17 @@ import { jumpTo } from "@/utils/jumpTo";
  *
  * WHEN THERE ARE NO REVIEWS the panel is not rendered at all: a card built around a big "0.0" and
  * five empty bars is worse than no card, and an empty five-star row beside a real price is the
- * manufactured social proof this PDP refuses everywhere else.
+ * manufactured social proof this PDP refuses everywhere else. What shows instead is one slim prompt
+ * row (ReviewComposer, after CaratLane's "Rate Us") -- the form opens in a sheet, not on the page.
  */
 export default function ProductReviews({ summary, product }) {
   const { count = 0, average = 0, distribution = {}, reviews = [] } = summary ?? {};
+  const composer = {
+    productGid: product.id,
+    handle: product.handle,
+    title: product.title,
+    image: product.media?.[0]?.url ?? null,
+  };
 
   return (
     // scroll-mt clears the sticky header AND the desktop buy bar that covers it -- both rating
@@ -40,17 +47,8 @@ export default function ProductReviews({ summary, product }) {
       </h2>
 
       {count === 0 ? (
-        <div className="mt-4 max-w-xl">
-          {/* The honest empty state. It does not pretend to be a feature, it asks for the thing
-              that is missing -- and it says WHO it is asking, because a tile only gets reviewed
-              months after it is laid and nobody expects otherwise. */}
-          <p className="text-sm leading-relaxed text-subtle">
-            Nobody has reviewed this one yet. If you’ve laid it, tell the next buyer how it went —
-            how it looks in the room, how it cut, how the delivery was.
-          </p>
-          <div className="mt-4">
-            <ReviewForm productGid={product.id} handle={product.handle} />
-          </div>
+        <div className="mt-4">
+          <ReviewComposer {...composer} mode="empty" />
         </div>
       ) : (
         <>
@@ -113,16 +111,10 @@ export default function ProductReviews({ summary, product }) {
 
                 {/* The CTA, OUTLINED rather than filled. Orange is this store's action colour and it
                     is spent on Add to cart; a second solid orange button in the same viewport is two
-                    primaries, and the one that matters would lose. */}
-                <details className="group mt-5">
-                  <summary className="flex cursor-pointer list-none items-center justify-center gap-2 rounded-sm border border-line-strong bg-surface px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink transition-colors hover:bg-paper">
-                    Write a review
-                    <span className="text-subtle transition-transform group-open:rotate-45">+</span>
-                  </summary>
-                  <div className="mt-3">
-                    <ReviewForm productGid={product.id} handle={product.handle} />
-                  </div>
-                </details>
+                    primaries, and the one that matters would lose. Opens the form in a sheet. */}
+                <div className="mt-5">
+                  <ReviewComposer {...composer} />
+                </div>
               </div>
             </div>
 

@@ -18,3 +18,13 @@ export const SORTS = [
 ];
 
 export const DEFAULT_SORT = SORTS[0].value;
+
+/**
+ * Search sorts -- Shopify's SearchSortKeys has only RELEVANCE and PRICE, so best-selling, newest
+ * and A-Z are not offered on /search rather than offered and silently ignored.
+ */
+export const SEARCH_SORTS = [
+  { value: "relevance", label: "Most relevant", key: "RELEVANCE", reverse: false },
+  { value: "price-low", label: "Price: low to high", key: "PRICE", reverse: false },
+  { value: "price-high", label: "Price: high to low", key: "PRICE", reverse: true },
+];

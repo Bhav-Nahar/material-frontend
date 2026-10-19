@@ -42,8 +42,16 @@ function readToken() {
  * same call Newsletter makes. `required` and `type="email"` are the client-side validation;
  * api/reviews repeats every check because a POST need not come from this form.
  */
-export default function ReviewForm({ productGid, handle }) {
-  const [rating, setRating] = useState(0);
+/** What each star means, shown beside the row as it is picked. */
+const RATING_WORDS = ["", "Poor", "Fair", "Good", "Very good", "Loved it"];
+
+/**
+ * `initialRating` -- the star a shopper tapped on the review prompt, so the form opens with it
+ * already chosen. `plain` drops the form's own card when it sits inside ReviewComposer's sheet,
+ * which is already the container.
+ */
+export default function ReviewForm({ productGid, handle, initialRating = 0, plain = false }) {
+  const [rating, setRating] = useState(initialRating);
   const [status, setStatus] = useState("idle"); // idle | loading | done | an error string
   // Uploaded photos, as {url, name}. They are on Shopify's CDN by the time they land here -- the
   // upload happens on pick, not on submit, so the customer sees whether it worked while they are
@@ -62,6 +70,15 @@ export default function ReviewForm({ productGid, handle }) {
    */
   const hasMounted = useHasMounted();
   const signedIn = useSelector((state) => state.user.isAuthenticated) && hasMounted;
+  // Signed in: name and email come from the account, so a customer only has to rate and write.
+  // Still editable -- someone may want "Priya S." on a public review rather than their full name.
+  const user = useSelector((state) => state.user.user);
+  const known = signedIn && user
+    ? {
+        name: user.name || [user.first_name ?? user.firstName, user.last_name ?? user.lastName].filter(Boolean).join(" "),
+        email: user.email || "",
+      }
+    : { name: "", email: "" };
 
   async function pickPhotos(event) {
     const chosen = [...event.target.files].slice(0, MAX_PHOTOS - photos.length);
@@ -144,14 +161,18 @@ export default function ReviewForm({ productGid, handle }) {
      * either way and stays true if moderation is switched on later.
      */
     return (
-      <p className="rounded-sm border border-line bg-surface p-4 text-sm text-ink">
-        Thank you — that’s with us. It won’t appear on this page straight away.
-      </p>
+      <div className={plain ? "py-6 text-center" : "rounded-sm border border-line bg-surface p-4"}>
+        <p className="text-sm font-medium text-ink">Thank you — that’s with us.</p>
+        <p className="mt-1 text-sm text-subtle">It won’t appear on this page straight away.</p>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-sm border border-line bg-surface p-4">
+    <form
+      onSubmit={handleSubmit}
+      className={plain ? "space-y-5" : "space-y-4 rounded-sm border border-line bg-surface p-4"}
+    >
       {/* THE RATING. Real radios, so the group is one tab stop, arrow-keys between the stars and
           announces itself; the input is sr-only and the star beside it is the visible control.
           `peer` carries focus from the hidden input onto the star, which is the whole reason the
@@ -171,7 +192,7 @@ export default function ReviewForm({ productGid, handle }) {
                 className="peer sr-only"
               />
               <Star
-                size={26}
+                size={plain ? 32 : 26}
                 strokeWidth={1.25}
                 aria-hidden="true"
                 className={`rounded-sm transition-colors peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-action ${
@@ -183,12 +204,22 @@ export default function ReviewForm({ productGid, handle }) {
               </span>
             </label>
           ))}
+          <span aria-live="polite" className="ml-2 text-sm font-medium text-ink">
+            {RATING_WORDS[rating]}
+          </span>
         </div>
       </fieldset>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field name="name" label="Your name" autoComplete="name" required />
-        <Field name="email" label="Your email" type="email" autoComplete="email" required />
+        <Field name="name" label="Your name" autoComplete="name" required defaultValue={known.name} />
+        <Field
+          name="email"
+          label="Your email"
+          type="email"
+          autoComplete="email"
+          required
+          defaultValue={known.email}
+        />
       </div>
 
       {/* Optional, and labelled as such. A required headline is what turns a one-line "arrived
@@ -299,7 +330,7 @@ export default function ReviewForm({ productGid, handle }) {
       <button
         type="submit"
         disabled={status === "loading" || uploading}
-        className="cursor-pointer rounded-sm bg-action px-6 py-3 text-xs font-semibold uppercase tracking-wide text-on-action transition-opacity hover:opacity-90 disabled:opacity-60"
+        className={`cursor-pointer rounded-sm bg-action px-6 py-3 text-xs font-semibold uppercase tracking-wide text-on-action transition-opacity hover:opacity-90 disabled:opacity-60 ${plain ? "w-full" : ""}`}
       >
         {status === "loading" ? "Sending…" : "Post review"}
       </button>
