@@ -9,6 +9,7 @@ import ShopByCategory from "@/components/home/ShopByCategory";
 import ShopByRoom from "@/components/home/ShopByRoom";
 import TrendingCollections from "@/components/home/TrendingCollections";
 import WhyMaterial from "@/components/home/WhyMaterial";
+import RecentlyViewed from "@/components/product/RecentlyViewed";
 import { BANNER_SLIDES } from "@/data/banners";
 
 export const revalidate = 86400;
@@ -22,6 +23,10 @@ export default function Home() {
       <CategoryRail />
       <HeroBanner slides={BANNER_SLIDES} />
       <WhyMaterial />
+      {/* A returning visitor's own trail, near the top -- they came back for something they were
+          weighing up. Renders nothing for a first visit (no trail) and nothing on the server, so
+          it costs a new visitor no space and no layout shift above the fold. */}
+      <RecentlyViewed title="Pick up where you left off" className="mt-8 lg:mt-12" />
       {/* One category for now. Laminates and wallpaper are one more line each once their
           collections exist. */}
       <CategoryProducts handle="tiles" />
