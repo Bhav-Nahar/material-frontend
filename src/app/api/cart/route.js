@@ -192,6 +192,31 @@ export async function POST(request) {
 
   if (!cart) return Response.json({ error: "Could not reach the cart" }, { status: 502 });
 
+  /*
+    SHOPIFY CAPS AN ADD AT WHAT IT WILL SELL, SILENTLY. A tracked variant at 0 stock that is set to
+    stop selling comes back as a line of quantity 0 -- no error, a 200, and a cart reading "0 / ₹0"
+    (every product material-admin made before 2026-10-20). Say so instead: drop the empty line and
+    fail the add, so the buy sheet stays open with the reason under its button.
+  */
+  const added = cart.lines?.nodes?.find((l) => l.merchandise?.id === variantId);
+  if (!added || added.quantity === 0) {
+    if (added) {
+      const cleaned = await storefront(CART_LINES_REMOVE, { cartId: cart.id, lineIds: [added.id] });
+      cart = cleaned?.cartLinesRemove?.cart ?? cart;
+    }
+    jar.set(CART_COOKIE, cart.id, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: COOKIE_MAX_AGE,
+    });
+    return Response.json(
+      { error: "This one is out of stock right now. Message us on WhatsApp and we'll check the depot." },
+      { status: 409 },
+    );
+  }
+
   jar.set(CART_COOKIE, cart.id, {
     httpOnly: true,
     sameSite: "lax",

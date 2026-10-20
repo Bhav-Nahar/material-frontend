@@ -297,6 +297,15 @@ export function pickVariant(variants, current, name, value) {
   );
 }
 
+/**
+ * The photograph that stands for THIS variant -- its colour's first photo, else Shopify's variant
+ * image, else the product's first. The buy sheet, the pinned bar and the wishlist all showed the
+ * product's first photo, so choosing Blue in the sheet kept a Brown thumbnail (2026-10-20).
+ */
+export function variantPhoto(product, variant) {
+  return variant?.gallery?.[0]?.url ?? variant?.image ?? product.media?.[0]?.url ?? null;
+}
+
 /** "Size: 2440 x 1220 mm, Colour: Walnut" -- for messages, where a bare variant title is ambiguous. */
 export function optionText(product, variant) {
   const parts = product.options.map((o) => `${o.name}: ${variant.options[o.name]}`);
