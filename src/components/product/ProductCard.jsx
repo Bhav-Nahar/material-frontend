@@ -1,9 +1,9 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Heart, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, Heart, Layers2, Star } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation, Pagination } from "swiper/modules";
 import { useDispatch, useSelector } from "react-redux";
@@ -21,6 +21,7 @@ import {
   pushRemoveFromWishlist,
 } from "@/lib/gtm";
 import { formatPrice } from "@/utils/formatPrice";
+import SimilarSheet from "./SimilarSheet";
 
 import "swiper/css";
 import "swiper/css/pagination";
@@ -61,6 +62,10 @@ export default function ProductCard({ product, priority = false, list = "", inde
   const prevClass = `img-prev-${id}`;
   const nextClass = `img-next-${id}`;
   const dispatch = useDispatch();
+  // "View similar" (Lucira's card icon). `similarUsed` mounts the drawer on first open only, so a
+  // grid of 24 cards is not 24 drawers waiting in the tree.
+  const [similarOpen, setSimilarOpen] = useState(false);
+  const [similarUsed, setSimilarUsed] = useState(false);
   // BOTH ARRAYS. `guestItems` is the localStorage list; `items` is the signed-in customer's server
   // list, and mergeGuestWishlist EMPTIES guestItems once it has pushed them up. Reading only
   // guestItems meant a signed-in customer's saved tiles lost their filled heart and their scrim on
@@ -143,6 +148,7 @@ export default function ProductCard({ product, priority = false, list = "", inde
     // The wishlist button bubbles too and does not navigate; it only rewrites a note that the next
     // real click overwrites, so it is not worth stopping.
     // `data-plp-handle` is what the listing page scrolls back to on return -- see lib/plpScroll.
+    <>
     <div ref={impressionRef} data-plp-handle={product.handle} onClick={onCardClick}>
       <div className="group/card media-bed relative aspect-swatch overflow-hidden rounded-sm border border-line">
         {/* More than one image: a swipeable gallery, their arrangement -- a hairline progress bar
@@ -249,7 +255,26 @@ export default function ProductCard({ product, priority = false, list = "", inde
             className={isWishlisted ? "fill-current text-action" : ""}
           />
         </button>
+
+        {/* VIEW SIMILAR, Lucira's corner icon: same frosted control as the heart, bottom-right so
+            the two never crowd. Only for real Shopify products -- the dev placeholders have no id
+            to ask about. */}
+        {String(product.id ?? "").startsWith("gid://") && (
+          <button
+            type="button"
+            onClick={() => {
+              setSimilarUsed(true);
+              setSimilarOpen(true);
+            }}
+            aria-label={`View products similar to ${product.title}`}
+            title="View similar"
+            className={`${CONTROL} absolute bottom-2.5 right-2 flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface`}
+          >
+            <Layers2 size={16} strokeWidth={1.5} />
+          </button>
+        )}
       </div>
+
 
       {/* Category, then title, then a ruled price row -- Material Depot's arrangement, minus the
           product code: it means nothing to a customer browsing a grid. */}
@@ -353,5 +378,17 @@ export default function ProductCard({ product, priority = false, list = "", inde
         )}
       </div>
     </div>
+
+    {/* OUTSIDE the card's root: React bubbles clicks through portals, so inside it a tap on a
+        similar product reached onCardClick and was logged as a click on THIS card. */}
+    {similarUsed && (
+      <SimilarSheet
+        productId={product.id}
+        title={product.title}
+        open={similarOpen}
+        onOpenChange={setSimilarOpen}
+      />
+    )}
+    </>
   );
 }

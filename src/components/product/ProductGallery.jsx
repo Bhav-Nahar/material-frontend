@@ -2,13 +2,14 @@
 
 import { startTransition, useRef, useState } from "react";
 import Image from "next/image";
-import { Heart, Share2 } from "lucide-react";
+import { Heart, Layers2, Share2 } from "lucide-react";
 import {
   LightingBar,
   LightingTrigger,
   LightingWash,
 } from "@/components/product/LightingPreview";
 import GalleryLightbox from "@/components/product/GalleryLightbox";
+import SimilarSheet from "@/components/product/SimilarSheet";
 import { useStickyFit } from "@/hooks/useStickyFit";
 
 /**
@@ -38,9 +39,22 @@ import { useStickyFit } from "@/hooks/useStickyFit";
  * the reason to hide photographs of the material behind a click on a page that sells how it looks.
  */
 
-export default function ProductGallery({ images, title, tag, wishlisted, onWishlist, onShare }) {
+export default function ProductGallery({ images, title, tag, wishlisted, onWishlist, onShare, productId }) {
   const [index, setIndex] = useState(0);
   const [open, setOpen] = useState(false);
+  // "Similar items" -- Lucira's pill on the PDP photograph, opening the same drawer the product
+  // cards' corner icon does.
+  const [similarOpen, setSimilarOpen] = useState(false);
+  const similarPill = productId && (
+    <button
+      type="button"
+      onClick={() => setSimilarOpen(true)}
+      className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 rounded-full bg-surface/80 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-ink shadow-sm backdrop-blur-md transition-colors hover:bg-surface"
+    >
+      <Layers2 size={14} strokeWidth={1.5} aria-hidden="true" />
+      Similar items
+    </button>
+  );
 
   /**
    * The lighting preview: whether the bar is open, and the temperature it is set to.
@@ -202,6 +216,9 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
                 className="absolute bottom-3 left-3 z-10 shadow-sm"
               />
             )}
+            {/* On the SECOND photograph, as Lucira's PDP has it -- the first keeps the lighting
+                trigger to itself. A one-photo product has no second, so it goes on the first. */}
+            {i === Math.min(1, images.length - 1) && similarPill}
           </div>
         ))}
 
@@ -279,11 +296,13 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
             className="absolute bottom-3 left-3 z-10 shadow-sm"
           />
 
+          {/* Counter centred: the bottom corners belong to lighting (left) and similar (right). */}
           {images.length > 1 && (
-            <span className="num absolute bottom-3 right-3 z-10 rounded-sm bg-surface/60 px-2 py-0.5 text-[11px] text-ink backdrop-blur-md">
+            <span className="num absolute bottom-3.5 left-1/2 z-10 -translate-x-1/2 rounded-sm bg-surface/60 px-2 py-0.5 text-[11px] text-ink backdrop-blur-md">
               {index + 1}/{images.length}
             </span>
           )}
+          {similarPill}
         </div>
 
         {/* Thumbnail strip, theirs. Buttons that scroll the rail above, rather than a second
@@ -337,6 +356,10 @@ export default function ProductGallery({ images, title, tag, wishlisted, onWishl
         onToggleLighting={() => setLightingOpen((v) => !v)}
         onContainer={setLightboxEl}
       />
+
+      {productId && (
+        <SimilarSheet productId={productId} title={title} open={similarOpen} onOpenChange={setSimilarOpen} />
+      )}
     </>
   );
 }

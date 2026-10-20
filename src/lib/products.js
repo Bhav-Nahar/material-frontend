@@ -143,6 +143,57 @@ export async function predictiveSearch(term, limit = 6) {
   };
 }
 
+/**
+ * "View similar" -- Lucira's drawer (card icon and PDP pill), for one product.
+ *
+ * SAME CATEGORY ONLY: a laminate's similar items are laminates. Shopify's RELATED recommendations
+ * first (they learn from the store and include related products set by hand in Search &
+ * Discovery), kept only when they share the product type; then best sellers OF THAT TYPE to fill
+ * -- on a small catalogue the recommendations alone are one or two, and a drawer that opens nearly
+ * empty is worse than no button. The first version filled from the product's first collection,
+ * which for a laminate in a mixed collection meant tiles and mosaics (2026-10-20).
+ *
+ * Fetched only when a drawer opens (via /api/similar), never with the page: it is a click, not a
+ * shelf, and its payload would otherwise be paid by every visitor for the few who ask.
+ */
+export async function getSimilar(id, limit = 12) {
+  if (!String(id || "").startsWith("gid://shopify/Product/")) return [];
+  const first = await storefront("getSimilar", SIMILAR_QUERY, { id }, 3600);
+  const type = first?.product?.productType || "";
+  const sameType = type
+    ? await storefront(
+        "getSimilarFill",
+        SAME_TYPE_QUERY,
+        { q: `product_type:"${type.replace(/"/g, "")}"`, first: limit + 1 },
+        3600,
+      )
+    : null;
+  const seen = new Set();
+  const nodes = [
+    ...(first?.productRecommendations ?? []).filter((p) => !type || p.productType === type),
+    ...(sameType?.products?.nodes ?? []),
+  ].filter((p) => p && p.id !== id && !seen.has(p.id) && seen.add(p.id));
+  return attachRatings(mapProducts(nodes.slice(0, limit)));
+}
+
+const SIMILAR_QUERY = `
+  query Similar($id: ID!) {
+    product(id: $id) { productType }
+    productRecommendations(productId: $id, intent: RELATED) {
+      productType
+      ${PRODUCT_FIELDS}
+    }
+  }
+`;
+
+const SAME_TYPE_QUERY = `
+  query SimilarFill($q: String!, $first: Int!) {
+    products(first: $first, query: $q, sortKey: BEST_SELLING) {
+      nodes { ${PRODUCT_FIELDS} }
+    }
+  }
+`;
+
 const PREDICTIVE_SEARCH = `
   query PredictiveSearch($q: String!, $limit: Int!) {
     predictiveSearch(
