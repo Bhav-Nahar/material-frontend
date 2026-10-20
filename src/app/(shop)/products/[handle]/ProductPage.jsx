@@ -29,7 +29,7 @@ import {
   pushProductView,
   pushRemoveFromWishlist,
 } from "@/lib/gtm";
-import { areaForBoxes, boxesForArea, optionText } from "@/lib/product";
+import { areaForBoxes, boxesForArea, optionText, variantPhoto } from "@/lib/product";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import { WHATSAPP_NUMBER } from "@/data/footer";
 import { formatPrice } from "@/utils/formatPrice";
@@ -286,7 +286,7 @@ export default function ProductPage({ product, reviews }) {
           productId: product.handle,
           productHandle: product.handle,
           title: product.title,
-          image: product.media[0]?.url,
+          image: variantPhoto(product, variant),
           price: variant.price,
           comparePrice: variant.comparePrice ?? "",
           // Pack price, so the row says which pack. The card path saves per-sq-ft with its unit.
@@ -379,6 +379,7 @@ export default function ProductPage({ product, reviews }) {
               wishlisted={wishlisted}
               onWishlist={toggleWishlist}
               onShare={share}
+              productId={product.id}
             />
           </div>
         )}
@@ -685,14 +686,15 @@ export default function ProductPage({ product, reviews }) {
             decorative 44px square. Desktop only, like the price -- the phone bar is WhatsApp and a
             full-width Add, and anything else in that row squeezes the primary action. */}
         <div className="hidden min-w-0 flex-1 items-center gap-3 lg:flex">
-          {product.media?.[0]?.url && (
+          {variantPhoto(product, variant) && (
             <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-sm border border-line bg-paper">
               <Image
-                src={product.media[0].url}
+                key={variantPhoto(product, variant)}
+                src={variantPhoto(product, variant)}
                 alt=""
                 fill
                 sizes="44px"
-                unoptimized={product.media[0].url.includes("cdn.shopify.com")}
+                unoptimized={variantPhoto(product, variant).includes("cdn.shopify.com")}
                 className="object-cover"
               />
             </span>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, LayoutGrid, ListFilter, SlidersHorizontal, X } from "lucide-react";
 import ProductCard from "@/components/product/ProductCard";
+import RecentlyViewedStrip from "@/components/product/RecentlyViewedStrip";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { OPEN_MOBILE_MENU } from "@/lib/events";
@@ -285,6 +287,15 @@ export default function CollectionPage({
   /* ---------------------------------------------------------------- rendering */
 
   const all = [...products, ...loaded];
+
+  // Recently viewed sits after the SECOND FULL ROW at whatever width this is -- grid-products is
+  // 2 / 3 / 4 columns, so a fixed index would leave a half-row above the block on some screen.
+  // A short listing gets it at the end. (useMediaQuery is false on the server; the block itself
+  // renders only after mount, so the server and the first client pass agree on no block.)
+  const wide = useMediaQuery("(min-width: 1800px)");
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  const cols = wide ? 4 : desktop ? 3 : 2;
+  const recentAt = Math.min(cols * 2, all.length);
   const count =
     totalCount != null ? totalCount : page?.hasNextPage ? `${all.length}+` : all.length;
 
@@ -463,14 +474,12 @@ export default function CollectionPage({
               }`}
             >
               {all.map((product, i) => (
-                <ProductCard
-                  key={`${product.handle}-${i}`}
-                  product={product}
-                  priority={i < priorityCards}
-                  list={list}
-                  index={i}
-                />
+                <Fragment key={`${product.handle}-${i}`}>
+                  {i === recentAt && <RecentlyViewedStrip className="my-2" />}
+                  <ProductCard product={product} priority={i < priorityCards} list={list} index={i} />
+                </Fragment>
               ))}
+              {recentAt === all.length && <RecentlyViewedStrip className="my-2" />}
             </div>
           )}
 

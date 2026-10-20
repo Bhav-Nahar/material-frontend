@@ -28,23 +28,27 @@ import ProductRail from "./ProductRail";
  * per useHasMounted's own note that is exactly what detaches every Swiper on the page and leaves the
  * gallery and the rails blank. useHasMounted is false on the server AND on the first client render,
  * so both agree on null and the rail appears on the pass after.
+ *
+ * WITHOUT a `product` (the homepage, 2026-10-20) it only renders: nothing to record, nothing to
+ * leave out, and the trail shown whole under its own `title`. A first-time visitor has no trail, so
+ * the section is simply absent for them.
  */
-export default function RecentlyViewed({ product }) {
+export default function RecentlyViewed({ product = null, title = "Recently viewed", className = "mt-6 lg:mt-8" }) {
   const dispatch = useDispatch();
   const hasMounted = useHasMounted();
   const rehydrated = useSelector((state) => state._persist?.rehydrated);
   const products = useSelector((state) => state.recentlyViewed.products);
 
   useEffect(() => {
-    if (rehydrated) dispatch(addRecentlyViewed(toCardProduct(product)));
+    if (rehydrated && product) dispatch(addRecentlyViewed(toCardProduct(product)));
   }, [rehydrated, product, dispatch]);
 
-  const viewedBefore = products.filter((p) => p.handle !== product.handle);
+  const viewedBefore = products.filter((p) => p.handle !== product?.handle);
   if (!hasMounted || !rehydrated || viewedBefore.length === 0) return null;
 
   return (
-    <section aria-label="Recently viewed" className="container-main mt-6 lg:mt-8">
-      <h2 className="font-display text-lg tracking-[-0.02em] lg:text-xl">Recently viewed</h2>
+    <section aria-label={title} className={`container-main ${className}`}>
+      <h2 className="font-display text-lg tracking-[-0.02em] lg:text-xl">{title}</h2>
       <div className="mt-4">
         <ProductRail products={viewedBefore} priorityCount={0} list="rail:recently-viewed" />
       </div>

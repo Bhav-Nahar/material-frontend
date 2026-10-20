@@ -29,6 +29,7 @@ import {
   pushPaymentFailure,
 } from "@/lib/gtm";
 import StickyCta from "@/components/checkout/StickyCta";
+import CheckoutHelp from "@/components/checkout/CheckoutHelp";
 import { syncCart } from "@/redux/features/cart/cartSlice";
 import { useRehydrated } from "@/hooks/useRehydrated";
 import { formatPrice } from "@/utils/formatPrice";
@@ -716,6 +717,8 @@ export default function PaymentPage() {
                 )}
               </Button>
             </StickyCta>
+
+            <CheckoutHelp items={items} total={orderTotal} step="payment" />
 
             {/* Named in words, not logos: these are payment methods Razorpay offers, which is a fact
                 about our own integration rather than a brand mark we would be borrowing. */}

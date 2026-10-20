@@ -23,9 +23,13 @@ const recentlyViewedSlice = createSlice({
         ...state.products.filter((p) => p.handle !== payload.handle),
       ].slice(0, MAX_RECENTLY_VIEWED);
     },
+    // The listing block's "Clear" -- a trail is the shopper's, and they can wipe it.
+    clearRecentlyViewed(state) {
+      state.products = [];
+    },
   },
 });
 
-export const { addRecentlyViewed } = recentlyViewedSlice.actions;
+export const { addRecentlyViewed, clearRecentlyViewed } = recentlyViewedSlice.actions;
 
 export default recentlyViewedSlice.reducer;

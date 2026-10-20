@@ -137,11 +137,20 @@ export function LightingTrigger({ active, onClick, className = "" }) {
       } ${className}`}
     >
       <Lightbulb className="h-3.5 w-3.5 shrink-0" />
+      {/* STAGED, so the words are never seen half-clipped (user, 2026-10-20: "the wording cuts
+          when it opens"). Width and opacity used to animate together over 500ms, so for most of
+          the reveal the label read "Lightin…". Now: opening, the space opens THEN the text fades
+          in; closing, the text fades out THEN the space shuts. The hover/focus variant carries the
+          opening timing, the resting class the closing one. */}
       <span
-        className={`overflow-hidden whitespace-nowrap transition-all duration-500 ease-out motion-reduce:transition-none ${
+        // -my/py-[3px]: the button is leading-none, so this box was exactly 12px tall and its
+        // overflow-hidden (needed for the sideways reveal) sliced the tails off the g and p in
+        // "Lighting preview". Three pixels of room each side, cancelled by the negative margin so
+        // the button stays the same height.
+        className={`-my-[3px] overflow-hidden whitespace-nowrap py-[3px] motion-reduce:transition-none ${
           expanded
-            ? "ml-1.5 max-w-[9rem] opacity-100"
-            : "max-w-0 opacity-0 group-hover/lt:ml-1.5 group-hover/lt:max-w-[9rem] group-hover/lt:opacity-100 group-focus-visible/lt:ml-1.5 group-focus-visible/lt:max-w-[9rem] group-focus-visible/lt:opacity-100"
+            ? "ml-1.5 max-w-[9rem] opacity-100 [transition:max-width_200ms_ease-out,margin_200ms_ease-out,opacity_150ms_ease-out_180ms]"
+            : "max-w-0 opacity-0 [transition:opacity_100ms_ease-in,max-width_200ms_ease-out_100ms,margin_200ms_ease-out_100ms] group-hover/lt:ml-1.5 group-hover/lt:max-w-[9rem] group-hover/lt:opacity-100 group-hover/lt:[transition:max-width_200ms_ease-out,margin_200ms_ease-out,opacity_150ms_ease-out_180ms] group-focus-visible/lt:ml-1.5 group-focus-visible/lt:max-w-[9rem] group-focus-visible/lt:opacity-100 group-focus-visible/lt:[transition:max-width_200ms_ease-out,margin_200ms_ease-out,opacity_150ms_ease-out_180ms]"
         }`}
       >
         Lighting preview

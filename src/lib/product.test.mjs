@@ -264,3 +264,13 @@ test("images no colour claims are shared: shown with every colour, after its own
   assert.deepEqual(names(p.variants[0]), ["a1", "a2", "later"], "own first, then the unclaimed one");
   assert.deepEqual(names(p.variants[1]), ["b1", "later"], "another colour's photos stay out");
 });
+
+import { variantPhoto } from "./product.js";
+
+test("variantPhoto: the colour's first photo, then the variant image, then the product's first", () => {
+  const product = { media: [{ url: "p.jpg" }] };
+  assert.equal(variantPhoto(product, { gallery: [{ url: "blue.jpg" }], image: "v.jpg" }), "blue.jpg");
+  assert.equal(variantPhoto(product, { gallery: [], image: "v.jpg" }), "v.jpg");
+  assert.equal(variantPhoto(product, { gallery: [] }), "p.jpg");
+  assert.equal(variantPhoto({ media: [] }, {}), null);
+});

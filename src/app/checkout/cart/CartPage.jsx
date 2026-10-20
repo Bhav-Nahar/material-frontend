@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import WhatsappIcon from "@/components/common/WhatsappIcon";
 import StickyCta from "@/components/checkout/StickyCta";
+import CheckoutHelp from "@/components/checkout/CheckoutHelp";
 import { CATEGORIES } from "@/data/catalog";
 import { WHATSAPP_NUMBER } from "@/data/footer";
 import { buildWhatsappLink } from "@/lib/whatsapp";
@@ -544,6 +545,8 @@ export default function CartPage() {
                   Samples refunded against your order
                 </li>
               </ul>
+
+              <CheckoutHelp items={items} total={totalAmount} step="cart" />
             </div>
 
             {error && <p className="mt-3 text-xs text-bad">{error}</p>}
@@ -555,6 +558,7 @@ export default function CartPage() {
 }
 
 /* -------------------------------------------------------------------------- pieces */
+
 
 /**
  * The empty cart.

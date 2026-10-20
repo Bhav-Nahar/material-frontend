@@ -5,7 +5,7 @@ import { ArrowRight, Check, Loader2, X } from "lucide-react";
 
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { areaForBoxes } from "@/lib/product";
+import { areaForBoxes, optionText, variantPhoto } from "@/lib/product";
 import { formatPrice } from "@/utils/formatPrice";
 import AreaCalculator from "./AreaCalculator";
 import VariantOptions from "./VariantOptions";
@@ -86,10 +86,11 @@ export default function BuySheet({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           {/* The product, so a sheet that covers the page still says what it is about. */}
           <div className="flex gap-3.5 border-b border-line pb-5">
-            {product.media[0] && (
+            {variantPhoto(product, variant) && (
               <div className="relative aspect-swatch w-16 shrink-0 overflow-hidden rounded-sm border border-line bg-paper">
                 <Image
-                  src={product.media[0].url}
+                  key={variantPhoto(product, variant)}
+                  src={variantPhoto(product, variant)}
                   alt=""
                   fill
                   sizes="64px"
@@ -99,6 +100,10 @@ export default function BuySheet({
             )}
             <div className="min-w-0">
               <p className="line-clamp-2 text-sm leading-snug text-ink">{product.title}</p>
+              {/* Which one is being added -- the sheet changes size and colour, so it must say. */}
+              {optionText(product, variant) && (
+                <p className="mt-1 text-xs font-medium text-ink">{optionText(product, variant)}</p>
+              )}
               <p className="num mt-1 text-xs text-subtle">
                 ₹{formatPrice(variant.perSqFt > 0 ? variant.perSqFt : variant.price)}
                 {variant.perSqFt > 0 ? "/sq ft" : `/${variant.packUnit}`}
