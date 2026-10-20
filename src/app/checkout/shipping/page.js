@@ -24,6 +24,7 @@ import { useRehydrated } from "@/hooks/useRehydrated";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DELIVERY_OPTIONS, gstBreakdown, unloadingCharge } from "@/lib/delivery-charges";
 import StickyCta from "@/components/checkout/StickyCta";
+import CheckoutHelp from "@/components/checkout/CheckoutHelp";
 import { formatPrice } from "@/utils/formatPrice";
 import { CheckoutSkeleton } from "@/components/ui/skeleton";
 
@@ -912,6 +913,8 @@ export default function ShippingPage() {
                 <ArrowRight size={15} strokeWidth={1.75} />
               </Button>
             </StickyCta>
+
+            <CheckoutHelp items={items} total={payableNow} step="address" />
           </div>
         </div>
       </div>
