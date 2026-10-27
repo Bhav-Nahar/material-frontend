@@ -53,6 +53,8 @@ const PRODUCT_QUERY = `
           packUnit: metafield(namespace: "custom", key: "pack_unit") { value }
           thickness: metafield(namespace: "custom", key: "thickness_mm") { value }
           coveragePerPack: metafield(namespace: "custom", key: "coverage_per_pack") { value }
+          # Finish (Matte / Gloss) belongs to the VARIANT: one product can be sold in both.
+          finish: metafield(namespace: "custom", key: "finish") { value }
           # This colour's photos, written by material-admin. A variant's own "image" is ONE photo;
           # this is the gallery the PDP swaps to when the colour is chosen.
           gallery: metafield(namespace: "custom", key: "variant_images") {
@@ -60,7 +62,6 @@ const PRODUCT_QUERY = `
           }
         }
       }
-      finish: metafield(namespace: "custom", key: "finish") { value }
       material: metafield(namespace: "custom", key: "material") { value }
       look: metafield(namespace: "custom", key: "look") { value }
       application: metafield(namespace: "custom", key: "application") { value }
@@ -224,7 +225,8 @@ export function mapProduct(p) {
     options: (p.options ?? []).filter((o) => o.optionValues?.length > 1),
     variants,
     specs: {
-      finish: p.finish?.value ?? null,
+      // Finish is per VARIANT (Matte / Gloss) -- see the variant's own `finish`, not a product field.
+      finish: null,
       material: p.material?.value ?? null,
       look: p.look?.value ?? null,
       slipRating: p.slipRating?.value ?? null,
@@ -266,6 +268,9 @@ function mapVariant(v) {
     // channel; null means "not saying", which is not the same as none.
     stock: v.quantityAvailable ?? null,
     options: Object.fromEntries((v.selectedOptions ?? []).map((o) => [o.name, o.value])),
+    // This variant's own finish (Matte / Gloss), else its Finish option, else null. There is no
+    // product-level finish: it cannot be right for a product sold in two.
+    finish: v.finish?.value ?? (v.selectedOptions ?? []).find((o) => o.name === "Finish")?.value ?? null,
     image: v.image?.url ?? null,
     price,
     comparePrice,
@@ -325,7 +330,7 @@ export function specRows(product, variant) {
     // "Colour" from material-admin, "Color" on products made in Shopify admin -- either spelling.
     ["Colour", variant.options[Object.keys(variant.options).find((k) => /^colou?r$/i.test(k))] ?? s.colourFamily.join(", ")],
     ["Look", s.look],
-    ["Finish", s.finish],
+    ["Finish", variant.finish],
     ["Material", s.material],
     ["Size", variant.options.Size ?? (variant.title !== "Default Title" ? variant.title : null)],
     ["Thickness", variant.thickness && `${variant.thickness} mm`],

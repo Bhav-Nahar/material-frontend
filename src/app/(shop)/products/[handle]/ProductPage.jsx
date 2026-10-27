@@ -499,7 +499,8 @@ export default function ProductPage({ product, reviews }) {
           {/* SPEC CHIPS. Material Depot's row, built from the metafields that are actually set
               rather than a hand-written marketing list -- see mapProduct in lib/product.js. Tinted
               by kind; the palette and why it stops short of a rainbow are documented in SpecChips. */}
-          <SpecChips specs={product.specs} />
+          {/* The finish chip is the chosen variant's own finish (Matte / Gloss); there is no product-level one. */}
+          <SpecChips specs={{ ...product.specs, finish: variant.finish }} />
 
           {/* OPTIONS. Shared with the buy sheet -- see VariantOptions. */}
           <div className="mt-6">
