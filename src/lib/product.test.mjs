@@ -237,16 +237,24 @@ test("optionText names each option; a lone untitled variant says nothing", () =>
 test("specRows: look facts then fit facts, following the variant, empty rows dropped", () => {
   const product = {
     specs: {
-      finish: "Textured", look: "Leather", material: null, application: ["TV Unit"], features: ["Light Weight"],
+      finish: null, look: "Leather", material: null, application: ["TV Unit"], features: ["Light Weight"],
       flexibility: null, importantNote: [], colourFamily: [], slipRating: null,
     },
   };
-  const rows = specRows(product, V("8x4", "Walnut"));
+  const rows = specRows(product, V("8x4", "Walnut", { finish: "Textured" }));
   assert.deepEqual(rows.map(([k]) => k), ["Colour", "Look", "Finish", "Size", "Thickness", "Coverage area"]);
   assert.equal(rows[0][1], "Walnut");
   assert.equal(rows.find(([k]) => k === "Coverage area")[1], "32 sq ft / sheet");
   // Shopify-admin products spell the option "Color".
   assert.equal(specRows(product, { ...V("8x4", "x"), options: { Size: "8x4", Color: "Ivory" } })[0][1], "Ivory");
+});
+
+test("specRows: the Finish row is the chosen variant's own finish, not a product field", () => {
+  const product = { specs: { finish: "High Gloss", look: null, material: null, colourFamily: [] } };
+  const finish = (v) => specRows(product, v).find(([k]) => k === "Finish")?.[1];
+  assert.equal(finish(V("8x4", "Grey", { finish: "Matte" })), "Matte");
+  assert.equal(finish(V("8x4", "Grey", { finish: "Gloss" })), "Gloss");
+  assert.equal(finish(V("8x4", "Grey")), undefined, "a variant with no finish shows none, never the product's");
 });
 
 import { mapProduct } from "./product.js";
