@@ -85,7 +85,7 @@ export default function PincodeCheck({ pincode, onPincode, inStock }) {
           {WHATSAPP_NUMBER ? (
             <a
               href={buildWhatsappLink(WHATSAPP_NUMBER, [
-                `Hi Material, do you deliver to ${result.pincode}?`,
+                `Hi Texture House, do you deliver to ${result.pincode}?`,
               ])}
               target="_blank"
               rel="noopener noreferrer"

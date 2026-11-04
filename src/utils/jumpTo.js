@@ -18,10 +18,10 @@
  * a scroll offset -- a number -- not an element, so layout shifting underneath mid-flight cannot
  * pull the destination around. Get the number right and the landing is right.
  *
- * NO `behavior: 'smooth'`, on purpose. 'auto' means "use the computed scroll-behavior", which is
- * the `scroll-behavior: smooth` in globals.css -- and that rule is already behind
- * prefers-reduced-motion. Passing 'smooth' here would force the animation on someone who asked
- * their OS for none.
+ * 'smooth' only when the OS allows motion: a long smooth scroll is exactly the movement that
+ * triggers motion sickness, and for someone who asked for none the instant jump is correct. (This
+ * used to defer to a global `scroll-behavior: smooth` in globals.css; that rule is gone because it
+ * also animated the browser's scroll restoration on back/forward.)
  *
  * BUT NOT OVER ANY DISTANCE (user, 2026-09-05: the jump to the reviews "is not a smooth flow").
  * The landing was never wrong -- measured, it puts the section exactly on its scroll-margin -- the
@@ -30,8 +30,8 @@
  * decoding eight full-width tiles that the flight path drags through the viewport. The animation
  * stopped being orientation and became waiting.
  *
- * A screen or two is the range where gliding tells you WHERE you went, which is what the note in
- * globals.css is protecting. Past that nobody is tracking scenery, so go straight there.
+ * A screen or two is the range where gliding tells you WHERE you went, which is the point of
+ * gliding at all. Past that nobody is tracking scenery, so go straight there.
  *
  * The href stays on the element: it is what makes the link real -- open in a new tab, copy link
  * address, and a working jump with JavaScript off. This only takes over when it can do the job, so
@@ -108,8 +108,11 @@ export const jumpTo = (id) => (event) => {
 
   window.scrollTo({
     top,
-    // 'auto' defers to the stylesheet, which is smooth and already respects reduced motion.
-    behavior: Math.abs(top - from) > window.innerHeight * SMOOTH_WITHIN_SCREENS ? "instant" : "auto",
+    behavior:
+      Math.abs(top - from) > window.innerHeight * SMOOTH_WITHIN_SCREENS ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
   });
   history.replaceState(null, "", `#${id}`);
 };

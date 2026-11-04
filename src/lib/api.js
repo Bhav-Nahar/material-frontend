@@ -140,17 +140,31 @@ const normalizeMobile = (mobile) => {
   return clean;
 };
 
-/* ================= SEND OTP ================= */
+/* ================= SEND / VERIFY OTP (email, current) ================= */
 
-export const sendOtpApi = (mobile) =>
+export const sendOtpApi = (email) =>
+  apiFetch("/api/auth/send-otp", {
+    method: "POST",
+    body: JSON.stringify({ email: String(email || "").trim() }),
+  });
+
+export const verifyOtpApi = (email, otp) =>
+  apiFetch("/api/auth/verify-otp", {
+    method: "POST",
+    body: JSON.stringify({ email: String(email || "").trim(), otp }),
+  });
+
+/* ================= SEND / VERIFY OTP (SMS) -- UNUSED ================= */
+// Parked with AuthFormSms and the backend's routes/auth-sms.js until Texture House has its own DLT
+// template. Only callable against a backend running the SMS routes.
+
+export const sendSmsOtpApi = (mobile) =>
   apiFetch("/api/auth/send-otp", {
     method: "POST",
     body: JSON.stringify({ mobile: normalizeMobile(mobile) }),
   });
 
-/* ================= VERIFY OTP ================= */
-
-export const verifyOtpApi = (mobile, otp, sessionId = null) =>
+export const verifySmsOtpApi = (mobile, otp, sessionId = null) =>
   apiFetch("/api/auth/verify-otp", {
     method: "POST",
     body: JSON.stringify({ mobile, otp, sessionId }),
@@ -159,20 +173,21 @@ export const verifyOtpApi = (mobile, otp, sessionId = null) =>
 /* ================= REGISTER ================= */
 
 /**
- * There is no /api/auth/check-customer any more. verify-otp already reports whether the number has
+ * There is no /api/auth/check-customer any more. verify-otp already reports whether the address has
  * an account (status LOGIN vs REGISTER_REQUIRED), and a standalone endpoint that answers "is this
- * number registered?" to anyone who asks is a phone-enumeration hole. The jewelry build shipped
- * one.
+ * registered?" to anyone who asks is an enumeration hole. The jewelry build shipped one.
  *
  * `otpProof` is the short-lived signed token verify-otp returns with REGISTER_REQUIRED. The backend
- * reads the mobile out of THAT and ignores any mobile in this body -- so no mobile is sent. Without
- * it, register would create verified accounts on numbers the caller never proved they own.
+ * reads the VERIFIED identity out of that -- the email on the email path, the mobile on the parked
+ * SMS path -- and only trusts the body for the other one. Without it, register would create
+ * verified accounts on inboxes/numbers the caller never proved they own.
  */
 export const registerCustomer = ({
   otpProof,
   firstName,
   lastName,
   email,
+  mobile,
   acceptsMarketing,
   signupPath,
   signupSource,
@@ -185,6 +200,7 @@ export const registerCustomer = ({
       firstName,
       lastName,
       email,
+      mobile: mobile ? normalizeMobile(mobile) : undefined,
       acceptsMarketing,
       // Recorded as Shopify customer tags, so "which page converted?" is answerable in the admin.
       signupPath,

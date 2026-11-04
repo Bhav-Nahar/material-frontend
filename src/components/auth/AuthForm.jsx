@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Check, Clock, Copy, Heart, Loader2, Lock } from "lucide-react";
+import { Check, Copy, Heart, Loader2, Lock, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,19 +33,25 @@ const LOGIN_IMAGE = {
   alt: "Living room with large-format porcelain floor tiles and a fluted wood panel wall",
 };
 
-// MSG91 sends 4 digits (its default, and what the DLT template is registered for). Must match
-// OTP_LENGTH in the backend's lib/msg91.js -- rendering six boxes for a four-digit code leaves two
-// empty forever and the auto-submit never fires.
-const OTP_LENGTH = 4;
-const RESEND_SECONDS = 60; // matches the backend's per-number cooldown
+// Six digits by email. Must match OTP_LENGTH in the backend's lib/emailOtp.js -- rendering six boxes
+// for a four-digit code leaves two empty forever and the auto-submit never fires. (The parked SMS
+// form, AuthFormSms, uses MSG91's four.)
+const OTP_LENGTH = 6;
+const RESEND_SECONDS = 60; // matches the backend's per-address cooldown
+
+const MOBILE_RE = /^[6-9]\d{9}$/;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Sign in and sign up, one flow, two faces.
  *
- * SIGNUP: name + email + mobile -> OTP -> scratch card.
- * LOGIN:  mobile -> OTP -> done.
+ * SIGNUP: name + email + mobile -> emailed code -> scratch card.
+ * LOGIN:  email -> emailed code -> done.
+ *
+ * EMAIL OTP (Resend), not SMS, until Texture House has its own DLT template -- the SMS version of
+ * this form is AuthFormSms.jsx, parked. The mobile is still collected at signup because checkout
+ * needs it (Razorpay contact, the number the delivery crew calls), but it is not what you log in with.
  *
  * Collecting the details BEFORE the OTP costs some step-one completion, and buys a real name and
  * email on every account instead of half-registered phone numbers. It also means the reward lands
@@ -53,9 +59,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * scratch card: verify, scratch, done.
  *
  * The two modes are a presentation choice, not a fork in the logic. verify-otp reports whether the
- * number already has an account, so picking the "wrong" entrance costs a customer nothing:
- *   - signup with an existing number -> logged straight in (no prize; they are not a new customer)
- *   - login with an unknown number   -> asked for name and email, then registered and given the card
+ * email already has an account, so picking the "wrong" entrance costs a customer nothing:
+ *   - signup with an existing email -> logged straight in (no prize; they are not a new customer)
+ *   - login with an unknown email   -> asked for name and mobile, then registered and given the card
  *
  * Extracted from the jewelry build's OtpSpinAuth, which is 916 lines because the wheel, the
  * Ornaverse calls, the prize coupon map and the auth flow all live in one component.
@@ -74,7 +80,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
   const signup = authMode === "signup";
   // Opened by "Proceed to checkout", not by a marketing surface. Same flow, different promise: this
   // one is a security step on the way to an order, so it drops the discount card and the photograph
-  // and says why the number is required.
+  // and says why the email is required.
   const checkout = authSource === "cart-checkout";
   // Opened by the first wishlist save, not by anyone asking to log in. CaratLane's shape (user,
   // 2026-08-22): ONE column, one field, one sentence about the list. The two-panel 720px box is
@@ -86,7 +92,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
   const compact = checkout || wishlist;
 
   // details -> otp -> (details, if a login turned out to be new) -> scratch
-  const [step, setStep] = useState(signup ? "details" : "phone");
+  const [step, setStep] = useState(signup ? "details" : "email");
   const [form, setForm] = useState({ firstName: "", email: "", mobile: "", acceptsMarketing: true });
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(""));
   const [otpProof, setOtpProof] = useState(null);
@@ -106,7 +112,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
   // The pendingSession, reachable from the unmount cleanup. If the dialog is dismissed at the
   // scratch step (Escape, backdrop tap) the account ALREADY EXISTS server-side and the session
   // cookie is set -- abandoning it here would show logged-out UI over a logged-in backend and cost
-  // the customer a second OTP SMS to get back in. The cleanup finishes the login instead.
+  // the customer a second emailed code to get back in. The cleanup finishes the login instead.
   const pendingRef = useRef(null);
   const finishLoginRef = useRef(null);
   useEffect(
@@ -119,7 +125,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
   // Following a header link changes the intent behind an already-open dialog.
   useEffect(() => {
     setAuthMode(mode);
-    setStep(mode === "signup" ? "details" : "phone");
+    setStep(mode === "signup" ? "details" : "email");
     setError(null);
   }, [mode]);
 
@@ -149,7 +155,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
       (isNew ? pushSignup : pushLogin)(data.user);
 
       // allSettled, not all: a wishlist that failed to merge must not stop the cart attaching, and
-      // neither should keep the customer out of a session they already paid an SMS for.
+      // neither should keep the customer out of a session they already verified for.
       // The token is passed explicitly (same as attachCartApi): redux-persist has not flushed the
       // session to localStorage yet, so apiFetch's own lookup would send the merge unauthenticated.
       await Promise.allSettled([
@@ -172,17 +178,17 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
 
   const sendOtp = async () => {
     setError(null);
-    if (!/^[6-9]\d{9}$/.test(form.mobile.replace(/\D/g, ""))) {
-      return setError("Enter a valid 10-digit mobile number");
-    }
     if (signup) {
       if (!form.firstName.trim()) return setError("Please enter your name");
-      if (!EMAIL_RE.test(form.email)) return setError("Enter a valid email address");
+    }
+    if (!EMAIL_RE.test(form.email.trim())) return setError("Enter a valid email address");
+    if (signup && !MOBILE_RE.test(form.mobile)) {
+      return setError("Enter a valid 10-digit mobile number");
     }
 
     setBusy(true);
     try {
-      await sendOtpApi(form.mobile);
+      await sendOtpApi(form.email);
       setStep("otp");
       setCooldown(RESEND_SECONDS);
       setTimeout(() => otpRefs.current[0]?.focus(), 50);
@@ -206,7 +212,8 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
         otpProof: proof,
         firstName,
         lastName: rest.join(" "),
-        email: details.email,
+        // The email is read from the proof server-side; the mobile is the one thing this body adds.
+        mobile: details.mobile,
         acceptsMarketing: details.acceptsMarketing,
         // Captured at submit, not at mount: someone can browse three PDPs with the dialog open, and
         // the page they were on when they committed is the one that converted them.
@@ -236,16 +243,16 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
     setError(null);
     setBusy(true);
     try {
-      const data = await verifyOtpApi(form.mobile, code);
+      const data = await verifyOtpApi(form.email, code);
 
       if (data.status !== "REGISTER_REQUIRED") {
-        // Known number. Straight in, no card — the reward is for first orders.
+        // Known email. Straight in, no card — the reward is for first orders.
         await finishLogin(data);
         return;
       }
 
       setOtpProof(data.otpProof);
-      if (form.firstName.trim() && EMAIL_RE.test(form.email)) {
+      if (form.firstName.trim() && MOBILE_RE.test(form.mobile)) {
         // Its own catch: the OTP is already verified and CONSUMED here, so a register failure
         // ("that email is already registered") must land on the details screen where it can be
         // fixed -- not wipe the OTP boxes and invite a retry of a code that will never work again.
@@ -256,7 +263,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
           setStep("details");
         }
       } else {
-        // Came through Log in with a number we have never seen. We hold a valid OTP proof, so ask
+        // Came through Log in with an email we have never seen. We hold a valid OTP proof, so ask
         // only for the two things still missing rather than starting them over.
         setStep("details");
       }
@@ -269,14 +276,14 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
     }
   };
 
-  // The details step does double duty: before the OTP for a signup, after it for a new number that
+  // The details step does double duty: before the OTP for a signup, after it for a new email that
   // arrived through Log in. Holding a proof is what tells them apart.
   const submitDetails = async () => {
     if (!otpProof) return sendOtp();
 
     setError(null);
     if (!form.firstName.trim()) return setError("Please enter your name");
-    if (!EMAIL_RE.test(form.email)) return setError("Enter a valid email address");
+    if (!MOBILE_RE.test(form.mobile)) return setError("Enter a valid 10-digit mobile number");
 
     setBusy(true);
     try {
@@ -402,21 +409,21 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
       )}
 
       <div className="flex flex-col justify-center gap-5 p-6 md:p-7">
-        {(step === "details" || step === "phone") && (
+        {(step === "details" || step === "email") && (
           <>
             {checkout ? (
               // Two headers, because the checkout path has two asks. Before the OTP it is explaining
-              // why a phone number stands between them and paying; after it, the number is verified
-              // and the remaining fields are the invoice's, which is a different sentence.
+              // why an email stands between them and paying; after it, the email is verified and the
+              // remaining fields are the invoice's and the delivery's, which is a different sentence.
               <header className="flex flex-col gap-1">
                 <h2 className="font-display text-xl text-ink">
-                  {otpProof ? "Billing details" : "Verify your mobile number"}
+                  {otpProof ? "Billing details" : "Verify your email"}
                 </h2>
                 <p className="flex items-center gap-2 text-sm text-subtle">
                   <Lock className="size-4 shrink-0 text-meta" />
                   {otpProof
-                    ? "Your invoice and order updates go here."
-                    : "Required to place an order. We'll send a one-time code."}
+                    ? "For your invoice, and the number our delivery crew calls."
+                    : "Required to place an order. We'll email you a one-time code."}
                 </p>
               </header>
             ) : signup ? (
@@ -441,7 +448,7 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
                   {/* The PROMISE, not the mechanism. "Verify your number" describes the chore; this
                       describes what the chore buys, which is the only reason to do it. */}
                   <p className="text-sm leading-snug text-subtle">
-                    Add your number and your list follows you — phone, laptop, and back again.
+                    Add your email and your list follows you — phone, laptop, and back again.
                   </p>
                 </div>
               </header>
@@ -449,44 +456,47 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
               <header className="flex flex-col gap-1">
                 <h2 className="font-display text-xl text-ink">Welcome back</h2>
                 <p className="flex items-center gap-2 text-sm text-subtle">
-                  <Clock className="size-4 shrink-0 text-meta" />
-                  One SMS code, no password.
+                  <Mail className="size-4 shrink-0 text-meta" />
+                  We&apos;ll email you a code. No password.
                 </p>
               </header>
             )}
 
-            {/* Name and email only where they are needed: on a signup, or on a login that turned out
-                to be a number we have never seen. A returning customer types one field. */}
+            {/* Name and mobile only where they are needed: on a signup, or on a login that turned out
+                to be an email we have never seen. A returning customer types one field. */}
             {(signup || otpProof) && (
-              <>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="auth-name">Full name</Label>
-                  <Input
-                    id="auth-name"
-                    autoFocus
-                    autoComplete="name"
-                    placeholder="Rohan Sharma"
-                    value={form.firstName}
-                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="auth-email">Email</Label>
-                  <Input
-                    id="auth-email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@company.com"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  />
-                  <p className="text-xs text-meta max-md:hidden">For your order confirmation and invoice.</p>
-                </div>
-              </>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="auth-name">Full name</Label>
+                <Input
+                  id="auth-name"
+                  autoFocus
+                  autoComplete="name"
+                  placeholder="Rohan Sharma"
+                  value={form.firstName}
+                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                />
+              </div>
             )}
 
+            {/* The login itself -- until it is verified. After that it is the proof's, not a field. */}
             {!otpProof && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="auth-email">Email</Label>
+                <Input
+                  id="auth-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoFocus={!signup}
+                  placeholder="you@company.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onKeyDown={(e) => e.key === "Enter" && !signup && submitDetails()}
+                />
+              </div>
+            )}
+
+            {(signup || otpProof) && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="auth-mobile">Mobile number</Label>
                 <div className="flex items-stretch">
@@ -498,7 +508,6 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
                     type="tel"
                     inputMode="numeric"
                     autoComplete="tel"
-                    autoFocus={!signup}
                     maxLength={10}
                     className="num rounded-l-none"
                     placeholder="98765 43210"
@@ -509,11 +518,12 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
                     onKeyDown={(e) => e.key === "Enter" && submitDetails()}
                   />
                 </div>
+                <p className="text-xs text-meta max-md:hidden">The number our delivery crew calls.</p>
               </div>
             )}
 
-            {/* Shown WHEREVER name and email are collected -- signup, and the login path that
-                turned out to be a new number (otpProof). register sends this flag on all of those
+            {/* Shown WHEREVER name and mobile are collected -- signup, and the login path that
+                turned out to be a new email (otpProof). register sends this flag on all of those
                 paths, and an opt-in the customer never saw is not a consent record. Pre-ticked, so
                 the default is still subscribed. */}
             {(signup || otpProof) && (
@@ -547,10 +557,10 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
               )}
             </Button>
 
-            {/* Consent sits with the action it covers: this button is where a phone number is handed
+            {/* Consent sits with the action it covers: this button is where an email and number are handed
                 over, so an implied-consent line is only honest if it is on screen at that click. */}
             <p className="text-center text-xs text-meta">
-              By continuing you agree to Material&apos;s{" "}
+              By continuing you agree to Texture House&apos;s{" "}
               <Link href="/pages/terms" className="text-action-ink underline underline-offset-2">
                 Terms &amp; Conditions
               </Link>{" "}
@@ -561,17 +571,17 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
               .
             </p>
 
-            {/* No "create an account instead" from checkout: an unknown number is asked for a name
-                and email straight after the OTP anyway, so the switch only offers a longer road to
+            {/* No "create an account instead" from checkout: an unknown email is asked for a name
+                and mobile straight after the OTP anyway, so the switch only offers a longer road to
                 the same place -- with a discount wheel parked in the middle of a payment flow. */}
             {!otpProof && !compact && (
               <p className="border-t border-line pt-4 text-center text-sm text-subtle">
-                {signup ? "Already have an account? " : "New to Material? "}
+                {signup ? "Already have an account? " : "New to Texture House? "}
                 <button
                   type="button"
                   onClick={() => {
                     setAuthMode(signup ? "login" : "signup");
-                    setStep(signup ? "phone" : "details");
+                    setStep(signup ? "email" : "details");
                     setError(null);
                   }}
                   className="font-medium text-action-ink underline underline-offset-2"
@@ -588,11 +598,11 @@ export default function AuthForm({ onSuccess, onClose, redirectPath, mode = "log
             <header className="flex flex-col gap-1.5">
               <h2 className="font-display text-xl text-ink">Enter the code</h2>
               <p className="text-sm text-subtle">
-                Sent to <span className="num text-ink">+91 {form.mobile}</span>{" "}
+                Sent to <span className="break-all text-ink">{form.email.trim()}</span>{" "}
                 <button
                   type="button"
                   onClick={() => {
-                    setStep(signup ? "details" : "phone");
+                    setStep(signup ? "details" : "email");
                     setOtp(Array(OTP_LENGTH).fill(""));
                     setError(null);
                   }}

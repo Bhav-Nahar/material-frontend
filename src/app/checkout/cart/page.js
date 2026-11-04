@@ -7,7 +7,7 @@ import CartPage from "./CartPage";
  * per-customer API route, so there is nothing for the server to render but the shell.
  */
 export const metadata = {
-  title: "Your cart | Material",
+  title: "Your cart | Texture House",
   robots: { index: false },
 };
 

@@ -90,7 +90,7 @@ export default async function Footer() {
                   {email && (
                     <li className="flex items-start gap-2.5">
                       <Mail size={15} strokeWidth={1.5} className="mt-0.5 shrink-0 text-paper/50" />
-                      <a href={`mailto:${email}`} className="underline-offset-4 hover:underline">
+                      <a href={`mailto:${email}`} className="break-all underline-offset-4 hover:underline">
                         {email}
                       </a>
                     </li>
@@ -143,7 +143,7 @@ export default async function Footer() {
 
       <div className="border-t border-paper/15">
         <div className="container-main flex flex-col-reverse items-center justify-between gap-3 py-5 text-xs text-paper/60 sm:flex-row">
-          <p>© {new Date().getFullYear()} Material. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Texture House. All rights reserved.</p>
           <ul className="flex items-center gap-5">
             {FOOTER_LEGAL.map((link) => (
               <li key={link.href}>

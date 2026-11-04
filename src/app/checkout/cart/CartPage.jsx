@@ -589,7 +589,7 @@ function EmptyCart() {
   const help =
     WHATSAPP_NUMBER &&
     buildWhatsappLink(WHATSAPP_NUMBER, [
-      "Hi Material, I'm looking for something for my space — can you help me choose?",
+      "Hi Texture House, I'm looking for something for my space — can you help me choose?",
     ]);
 
   return (

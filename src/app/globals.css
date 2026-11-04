@@ -207,23 +207,9 @@
 
   img, video { display: block; max-width: 100%; }
 
-  /* IN-PAGE ANCHORS GLIDE, they do not teleport.
-
-     The PDP's rating pill is `href="#reviews"`, and the section is five
-     screens down -- a native jump lands there with no sense of having travelled, so it reads as the
-     page having replaced itself rather than scrolled. The targets already carry `scroll-mt-*` to
-     clear the sticky header; this is the other half.
-
-     Safe to put on `html` under the App Router: Next forces `scroll-behavior: auto` around its own
-     navigation scrolls, so page-to-page transitions still snap to the top instantly instead of
-     animating down the whole document.
-
-     Behind prefers-reduced-motion, because a long smooth scroll is exactly the kind of movement
-     that triggers motion sickness -- and that is also the one case where the instant jump is
-     correct rather than lazy. */
-  @media (prefers-reduced-motion: no-preference) {
-    html { scroll-behavior: smooth; }
-  }
+  /* NO global `scroll-behavior: smooth`. On `html` it also animates the browser's own scroll
+     restoration on back/forward, so returning to a listing glided down the whole grid. The one
+     in-page jump that should glide (#reviews) asks for it itself -- see utils/jumpTo. */
 
   /* §10 — 2px orange focus ring at 2px offset */
   :focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }

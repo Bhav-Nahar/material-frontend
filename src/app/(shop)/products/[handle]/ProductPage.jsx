@@ -318,7 +318,7 @@ export default function ProductPage({ product, reviews }) {
   const sampleLink =
     WHATSAPP_NUMBER &&
     buildWhatsappLink(WHATSAPP_NUMBER, [
-      `Hi Material, I'd like a sample of ${product.title}`,
+      `Hi Texture House, I'd like a sample of ${product.title}`,
       optionText(product, variant),
       variant.sku && `Code: ${variant.sku}`,
       `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/products/${product.handle}`,
@@ -330,7 +330,7 @@ export default function ProductPage({ product, reviews }) {
   const askLink =
     WHATSAPP_NUMBER &&
     buildWhatsappLink(WHATSAPP_NUMBER, [
-      `Hi Material, I have a question about ${product.title}`,
+      `Hi Texture House, I have a question about ${product.title}`,
       optionText(product, variant),
       `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/products/${product.handle}`,
     ]);

@@ -24,7 +24,7 @@ export const revalidate = 300;
 export async function generateMetadata({ searchParams }) {
   const { q = "" } = await searchParams;
   return {
-    title: q ? `Search: ${q} — Material` : "Search — Material",
+    title: q ? `Search: ${q} — Texture House` : "Search — Texture House",
     // Search results are for the searcher, not the index.
     robots: { index: false },
   };

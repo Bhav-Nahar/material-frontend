@@ -6,7 +6,7 @@ import { getArticles } from "@/lib/blog";
 export const revalidate = 600;
 
 export const metadata = {
-  title: "Guides | Material",
+  title: "Guides | Texture House",
   description: "How to choose, measure and lay tiles, laminates and wallpaper.",
 };
 

@@ -22,7 +22,7 @@ export async function generateMetadata({ params }) {
   if (!article) return { title: "Guide not found" };
 
   return {
-    title: article.seo?.title || `${article.title} | Material`,
+    title: article.seo?.title || `${article.title} | Texture House`,
     description: article.seo?.description || article.excerpt?.slice(0, 155),
   };
 }

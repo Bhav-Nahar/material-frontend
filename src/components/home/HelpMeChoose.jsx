@@ -38,7 +38,7 @@ export default function HelpMeChoose() {
     const answers = new FormData(event.currentTarget);
 
     const url = buildWhatsappLink(WHATSAPP_NUMBER, [
-      "Hi Material, I need help choosing.",
+      "Hi Texture House, I need help choosing.",
       // Every question is `required`, so the browser has already refused to submit a blank one --
       // but buildWhatsappLink drops falsy lines anyway, so a question added without `required`
       // later cannot produce a "Style: undefined".

@@ -47,7 +47,7 @@ export default function FloatingContact() {
       {!onProduct && (
         <a
           href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-            "Hi, I want to know more about Material.",
+            "Hi, I want to know more about Texture House.",
           )}`}
           target="_blank"
           rel="noopener noreferrer"

@@ -24,7 +24,7 @@
  * correctly -- that is what dataLayer is for.
  */
 
-const BRAND = "Material";
+const BRAND = "Texture House";
 const CURRENCY = "INR";
 
 /**

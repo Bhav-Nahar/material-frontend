@@ -43,7 +43,7 @@ export default function GlobalError({ error, reset }) {
       >
         <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>Something went wrong</h1>
         <p style={{ margin: 0, color: '#6e6a64', maxWidth: '28rem' }}>
-          Material didn&apos;t load. Please reload the page.
+          Texture House didn&apos;t load. Please reload the page.
         </p>
         <button
           type="button"

@@ -24,7 +24,7 @@ export async function generateMetadata({ params }) {
   if (!page) return { title: "Page not found" };
 
   return {
-    title: page.seo?.title || `${page.title} | Material`,
+    title: page.seo?.title || `${page.title} | Texture House`,
     description: page.seo?.description || page.bodySummary?.slice(0, 155),
   };
 }

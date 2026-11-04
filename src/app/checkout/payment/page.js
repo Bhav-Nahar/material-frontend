@@ -254,7 +254,7 @@ export default function PaymentPage() {
         order_id: order.razorpayOrderId,
         amount: order.amount,
         currency: order.currency,
-        name: "Material",
+        name: "Texture House",
         description:
           `${order.totalQuantity} ${order.totalQuantity === 1 ? "item" : "items"}` +
           (order.paymentMode === "ppcod" ? " · advance payment" : ""),
@@ -378,7 +378,7 @@ export default function PaymentPage() {
             items,
             value: payableNow,
             coupon: appliedCoupon?.code,
-            affiliation: "Material",
+            affiliation: "Texture House",
             payment_type: paymentMode === "ppcod" ? "Partial COD" : "Razorpay",
             // Shopify quotes tax-inclusive on an Indian storefront, so GST is EXTRACTED from the
             // goods total, never added. Same arithmetic as the summary above this button.
