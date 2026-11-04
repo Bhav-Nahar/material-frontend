@@ -50,7 +50,7 @@ export async function generateMetadata({ params }) {
   );
 
   return {
-    title: product.seo?.title || `${product.title} | Material`,
+    title: product.seo?.title || `${product.title} | Texture House`,
     description,
     alternates: { canonical: `/products/${handle}` },
     openGraph: {

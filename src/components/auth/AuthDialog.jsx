@@ -28,7 +28,7 @@ export default function AuthDialog({ open, onOpenChange, redirectPath, mode = "l
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="bottom" className="max-h-[95dvh] overflow-y-auto bg-surface p-0">
-          <SheetTitle className="sr-only">Sign in to Material</SheetTitle>
+          <SheetTitle className="sr-only">Sign in to Texture House</SheetTitle>
           <AuthForm onClose={close} onSuccess={close} redirectPath={redirectPath} mode={mode} />
         </SheetContent>
       </Sheet>
@@ -38,7 +38,7 @@ export default function AuthDialog({ open, onOpenChange, redirectPath, mode = "l
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={`w-full ${width} gap-0 overflow-hidden border-line bg-surface p-0`}>
-        <DialogTitle className="sr-only">Sign in to Material</DialogTitle>
+        <DialogTitle className="sr-only">Sign in to Texture House</DialogTitle>
         <DialogDescription className="sr-only">
           Sign in or create an account with your mobile number.
         </DialogDescription>

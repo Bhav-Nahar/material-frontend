@@ -43,7 +43,7 @@ export default function HomeFaqs() {
               moment someone has a question the list does not answer. */}
           {WHATSAPP_NUMBER && (
             <a
-              href={buildWhatsappLink(WHATSAPP_NUMBER, ["Hi Material, I have a question."])}
+              href={buildWhatsappLink(WHATSAPP_NUMBER, ["Hi Texture House, I have a question."])}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 inline-block text-sm font-medium text-action-ink underline decoration-line-strong underline-offset-4 hover:decoration-current"

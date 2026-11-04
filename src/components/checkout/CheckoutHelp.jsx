@@ -22,7 +22,7 @@ const STEP = { cart: "", address: " -- I'm on the address step", payment: " -- I
 export default function CheckoutHelp({ items = [], total = 0, step = "cart" }) {
   if (!WHATSAPP_NUMBER) return null;
   const whatsapp = buildWhatsappLink(WHATSAPP_NUMBER, [
-    `Hi Material, I need help with my order${STEP[step] ?? ""}:`,
+    `Hi Texture House, I need help with my order${STEP[step] ?? ""}:`,
     ...items.map(
       (item) =>
         `• ${item.title}${item.variantTitle && item.variantTitle !== "Default Title" ? ` (${item.variantTitle})` : ""} × ${item.quantity}`,

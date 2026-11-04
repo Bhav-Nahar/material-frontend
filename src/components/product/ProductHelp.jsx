@@ -36,7 +36,7 @@ export default function ProductHelp({ product, variant }) {
   if (!WHATSAPP_NUMBER) return null;
 
   const orderLink = buildWhatsappLink(WHATSAPP_NUMBER, [
-    `Hi Material, I'd like to order ${product.title}`,
+    `Hi Texture House, I'd like to order ${product.title}`,
     variant?.title && variant.title !== "Default Title" && `Size: ${variant.title}`,
     variant?.sku && `Code: ${variant.sku}`,
     `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/products/${product.handle}`,

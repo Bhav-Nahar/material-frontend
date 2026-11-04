@@ -26,7 +26,7 @@ export async function generateMetadata({ params }) {
   const description = collection.seo?.description || collection.description.slice(0, 160);
 
   return {
-    title: collection.seo?.title || `${collection.title} | Material`,
+    title: collection.seo?.title || `${collection.title} | Texture House`,
     description,
     alternates: { canonical: `/collections/${handle}` },
     openGraph: {

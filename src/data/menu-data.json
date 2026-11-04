@@ -6,7 +6,7 @@
       "items": [
         {
           "title": "Tiles",
-          "url": "https://material.in/collections/tiles",
+          "url": "https://texturehouse.in/collections/tiles",
           "resource": {
             "__typename": "Collection",
             "handle": "tiles",
@@ -21,36 +21,36 @@
           "items": [
             {
               "title": "Shop by room",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Bathroom",
-                  "url": "https://material.in/collections/tiles?room=bathroom",
+                  "url": "https://texturehouse.in/collections/tiles?room=bathroom",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Kitchen",
-                  "url": "https://material.in/collections/tiles?room=kitchen",
+                  "url": "https://texturehouse.in/collections/tiles?room=kitchen",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Living room",
-                  "url": "https://material.in/collections/tiles?room=living",
+                  "url": "https://texturehouse.in/collections/tiles?room=living",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Balcony",
-                  "url": "https://material.in/collections/tiles?room=balcony",
+                  "url": "https://texturehouse.in/collections/tiles?room=balcony",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Outdoor",
-                  "url": "https://material.in/collections/tiles?room=outdoor",
+                  "url": "https://texturehouse.in/collections/tiles?room=outdoor",
                   "resource": null,
                   "items": []
                 }
@@ -58,36 +58,36 @@
             },
             {
               "title": "Shop by look",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Marble",
-                  "url": "https://material.in/collections/tiles?look=marble",
+                  "url": "https://texturehouse.in/collections/tiles?look=marble",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Cement",
-                  "url": "https://material.in/collections/tiles?look=cement",
+                  "url": "https://texturehouse.in/collections/tiles?look=cement",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Wood-look",
-                  "url": "https://material.in/collections/tiles?look=wood",
+                  "url": "https://texturehouse.in/collections/tiles?look=wood",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Terrazzo",
-                  "url": "https://material.in/collections/tiles?look=terrazzo",
+                  "url": "https://texturehouse.in/collections/tiles?look=terrazzo",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Zellige",
-                  "url": "https://material.in/collections/tiles?look=zellige",
+                  "url": "https://texturehouse.in/collections/tiles?look=zellige",
                   "resource": null,
                   "items": []
                 }
@@ -95,30 +95,30 @@
             },
             {
               "title": "Shop by finish",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Matte",
-                  "url": "https://material.in/collections/tiles?finish=matte",
+                  "url": "https://texturehouse.in/collections/tiles?finish=matte",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Glossy",
-                  "url": "https://material.in/collections/tiles?finish=glossy",
+                  "url": "https://texturehouse.in/collections/tiles?finish=glossy",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Textured",
-                  "url": "https://material.in/collections/tiles?finish=textured",
+                  "url": "https://texturehouse.in/collections/tiles?finish=textured",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Anti-skid",
-                  "url": "https://material.in/collections/tiles?slip=r11",
+                  "url": "https://texturehouse.in/collections/tiles?slip=r11",
                   "resource": null,
                   "items": []
                 }
@@ -126,30 +126,30 @@
             },
             {
               "title": "Shop by size",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "300 × 600 mm",
-                  "url": "https://material.in/collections/tiles?size=300x600",
+                  "url": "https://texturehouse.in/collections/tiles?size=300x600",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "600 × 600 mm",
-                  "url": "https://material.in/collections/tiles?size=600x600",
+                  "url": "https://texturehouse.in/collections/tiles?size=600x600",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "800 × 800 mm",
-                  "url": "https://material.in/collections/tiles?size=800x800",
+                  "url": "https://texturehouse.in/collections/tiles?size=800x800",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "1200 × 600 mm",
-                  "url": "https://material.in/collections/tiles?size=1200x600",
+                  "url": "https://texturehouse.in/collections/tiles?size=1200x600",
                   "resource": null,
                   "items": []
                 }
@@ -159,7 +159,7 @@
         },
         {
           "title": "Laminates",
-          "url": "https://material.in/collections/laminates",
+          "url": "https://texturehouse.in/collections/laminates",
           "resource": {
             "__typename": "Collection",
             "handle": "laminates",
@@ -174,30 +174,30 @@
           "items": [
             {
               "title": "Shop by look",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Woodgrain",
-                  "url": "https://material.in/collections/laminates?look=woodgrain",
+                  "url": "https://texturehouse.in/collections/laminates?look=woodgrain",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Solid colour",
-                  "url": "https://material.in/collections/laminates?look=solid",
+                  "url": "https://texturehouse.in/collections/laminates?look=solid",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Fluted",
-                  "url": "https://material.in/collections/laminates?look=fluted",
+                  "url": "https://texturehouse.in/collections/laminates?look=fluted",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Stone-look",
-                  "url": "https://material.in/collections/laminates?look=stone",
+                  "url": "https://texturehouse.in/collections/laminates?look=stone",
                   "resource": null,
                   "items": []
                 }
@@ -205,24 +205,24 @@
             },
             {
               "title": "Shop by finish",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Matte",
-                  "url": "https://material.in/collections/laminates?finish=matte",
+                  "url": "https://texturehouse.in/collections/laminates?finish=matte",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Gloss",
-                  "url": "https://material.in/collections/laminates?finish=gloss",
+                  "url": "https://texturehouse.in/collections/laminates?finish=gloss",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Textured",
-                  "url": "https://material.in/collections/laminates?finish=textured",
+                  "url": "https://texturehouse.in/collections/laminates?finish=textured",
                   "resource": null,
                   "items": []
                 }
@@ -230,24 +230,24 @@
             },
             {
               "title": "Shop by use",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Wardrobe",
-                  "url": "https://material.in/collections/laminates?use=wardrobe",
+                  "url": "https://texturehouse.in/collections/laminates?use=wardrobe",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Kitchen shutters",
-                  "url": "https://material.in/collections/laminates?use=kitchen",
+                  "url": "https://texturehouse.in/collections/laminates?use=kitchen",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Wall panelling",
-                  "url": "https://material.in/collections/laminates?use=wall",
+                  "url": "https://texturehouse.in/collections/laminates?use=wall",
                   "resource": null,
                   "items": []
                 }
@@ -257,7 +257,7 @@
         },
         {
           "title": "Wallpaper",
-          "url": "https://material.in/collections/wallpaper",
+          "url": "https://texturehouse.in/collections/wallpaper",
           "resource": {
             "__typename": "Collection",
             "handle": "wallpaper",
@@ -272,24 +272,24 @@
           "items": [
             {
               "title": "Shop by room",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Bedroom",
-                  "url": "https://material.in/collections/wallpaper?room=bedroom",
+                  "url": "https://texturehouse.in/collections/wallpaper?room=bedroom",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Living room",
-                  "url": "https://material.in/collections/wallpaper?room=living",
+                  "url": "https://texturehouse.in/collections/wallpaper?room=living",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Children's room",
-                  "url": "https://material.in/collections/wallpaper?room=kids",
+                  "url": "https://texturehouse.in/collections/wallpaper?room=kids",
                   "resource": null,
                   "items": []
                 }
@@ -297,30 +297,30 @@
             },
             {
               "title": "Shop by pattern",
-              "url": "https://material.in#",
+              "url": "https://texturehouse.in#",
               "resource": null,
               "items": [
                 {
                   "title": "Plain and textured",
-                  "url": "https://material.in/collections/wallpaper?pattern=plain",
+                  "url": "https://texturehouse.in/collections/wallpaper?pattern=plain",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Floral",
-                  "url": "https://material.in/collections/wallpaper?pattern=floral",
+                  "url": "https://texturehouse.in/collections/wallpaper?pattern=floral",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Geometric",
-                  "url": "https://material.in/collections/wallpaper?pattern=geometric",
+                  "url": "https://texturehouse.in/collections/wallpaper?pattern=geometric",
                   "resource": null,
                   "items": []
                 },
                 {
                   "title": "Mural",
-                  "url": "https://material.in/collections/wallpaper?pattern=mural",
+                  "url": "https://texturehouse.in/collections/wallpaper?pattern=mural",
                   "resource": null,
                   "items": []
                 }
@@ -330,7 +330,7 @@
         },
         {
           "title": "Stone",
-          "url": "https://material.in/collections/stone",
+          "url": "https://texturehouse.in/collections/stone",
           "resource": {
             "__typename": "Collection",
             "handle": "stone",
@@ -344,7 +344,7 @@
         },
         {
           "title": "Wood",
-          "url": "https://material.in/collections/wood",
+          "url": "https://texturehouse.in/collections/wood",
           "resource": {
             "__typename": "Collection",
             "handle": "wood",
@@ -358,7 +358,7 @@
         },
         {
           "title": "Hardware",
-          "url": "https://material.in/collections/hardware",
+          "url": "https://texturehouse.in/collections/hardware",
           "resource": {
             "__typename": "Collection",
             "handle": "hardware",

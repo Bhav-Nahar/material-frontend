@@ -43,7 +43,7 @@ export const metadata = {
      is resolved against THIS, and without it Next falls back to localhost:3000 -- so every page in
      production was declaring its canonical URL to be a machine nobody can reach. */
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
-  title: 'Material — tiles, laminates and wallpaper in Mumbai',
+  title: 'Texture House — tiles, laminates and wallpaper in Mumbai',
   description:
     'Curated tiles, laminates and wallpaper we hold in stock, delivered across Mumbai. ' +
     'Priced per square foot, sold by the box.',

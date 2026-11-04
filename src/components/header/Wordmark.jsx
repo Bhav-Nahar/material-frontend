@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /**
- * The wordmark: MATERIAL in Bai Jamjuree 700, orange.
+ * The wordmark: TEXTURE HOUSE in Bai Jamjuree 700, orange.
  *
  * §02 records that every store render sets the wordmark in orange and that this "overrides the
  * colourway guidance for retail only" -- extended to web deliberately. WCAG exempts logotypes from
@@ -14,15 +14,15 @@ import Link from "next/link";
  */
 export default function Wordmark({ href, className = "" }) {
   const mark = (
-    <span className="font-display text-2xl font-bold uppercase leading-none tracking-[-0.02em] text-[var(--action)] lg:text-3xl">
-      Material
+    <span className="font-display text-xl font-bold uppercase leading-none tracking-[-0.02em] text-[var(--action)] lg:text-3xl">
+      Texture House
     </span>
   );
 
   if (!href) return <span className={`inline-flex items-center ${className}`}>{mark}</span>;
 
   return (
-    <Link href={href} aria-label="Material home" className={`inline-flex items-center ${className}`}>
+    <Link href={href} aria-label="Texture House home" className={`inline-flex items-center ${className}`}>
       {mark}
     </Link>
   );

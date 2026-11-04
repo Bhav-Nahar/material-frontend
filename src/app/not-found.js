@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
  * ever justifies them; it will not until the site has enough URLs to mistype.
  */
 export const metadata = {
-  title: 'Page not found — Material',
+  title: 'Page not found — Texture House',
 };
 
 export default function NotFound() {

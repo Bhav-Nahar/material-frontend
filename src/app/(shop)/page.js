@@ -19,7 +19,7 @@ export default function Home() {
     <main>
       {/* The page's one h1, for the heading tree and the index — every section below starts at h2,
           and the hero is a photograph. sr-only: the banner IS the visual headline. */}
-      <h1 className="sr-only">Material — tiles, laminates and wallpaper in Mumbai</h1>
+      <h1 className="sr-only">Texture House — tiles, laminates and wallpaper in Mumbai</h1>
       <CategoryRail />
       <HeroBanner slides={BANNER_SLIDES} />
       <WhyMaterial />

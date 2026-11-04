@@ -896,7 +896,7 @@ export default function MobileHeader({ menuData }) {
           <div className="px-4 space-y-1">
             {/* The REAL number from data/footer.js — this shipped pointing at +91 0000000000, so
                 every enquiry from the menu's most prominent contact card silently died. */}
-            <a href={buildWhatsappLink(WHATSAPP_NUMBER, ["I want to know more about Material"])} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 border border-gray-100 rounded-lg group active:bg-gray-50 bg-paper">
+            <a href={buildWhatsappLink(WHATSAPP_NUMBER, ["I want to know more about Texture House"])} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-4 border border-gray-100 rounded-lg group active:bg-gray-50 bg-paper">
               <div className="flex items-center gap-4">
                 <div className="flex items-center justify-center">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1049,13 +1049,13 @@ export default function MobileHeader({ menuData }) {
           <Link href="/" prefetch={false} className="flex items-center shrink-0">
             {isProductPage ? (
               // ONE wordmark behind an animating clip. The wrapper's width is the whole
-              // animation: 114px shows MATERIAL entire (measured at text-2xl), 20px leaves
-              // exactly the M -- the first letter IS the logo-mark, so there is no second
+              // animation: 160px shows TEXTURE HOUSE entire (measured at text-xl), 12px leaves
+              // exactly the T -- the first letter IS the logo-mark, so there is no second
               // element to cross-fade and nothing to mis-position. The previous version
               // stacked two unpositioned wordmarks here and clipped both mid-word.
               <span
                 className={cn("relative block h-9 overflow-hidden", SEARCH_EASE)}
-                style={{ width: isSearchExpanded ? 20 : 114 }}
+                style={{ width: isSearchExpanded ? 12 : 160 }}
               >
                 <Wordmark className="h-9 whitespace-nowrap" />
               </span>

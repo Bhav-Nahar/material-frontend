@@ -37,7 +37,7 @@ export const FOOTER_COLUMNS = [
  * The phone is real (given by the merchant); the email and address are still PLACEHOLDERS.
  */
 export const FOOTER_CONTACT = {
-  email: "hello@material.in", // PLACEHOLDER
+  email: "hello@texturehouse.in", // PLACEHOLDER
   phone: "+91 70210 52482",
   address: "Mumbai, Maharashtra", // PLACEHOLDER
 };

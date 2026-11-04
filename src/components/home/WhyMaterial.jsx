@@ -20,7 +20,7 @@ const PROMISES = [
 
 export default function WhyMaterial() {
   return (
-    <section aria-label="Why Material" className="border-y border-line bg-surface">
+    <section aria-label="Why Texture House" className="border-y border-line bg-surface">
       <div className="container-main">
         <ul className="grid grid-cols-3 divide-x divide-line">
           {PROMISES.map(({ icon: Icon, top, bottom }) => (
