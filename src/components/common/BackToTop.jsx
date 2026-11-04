@@ -69,15 +69,18 @@ export default function BackToTop() {
   return (
     <button
       type="button"
-      // SMOOTH (user, 2026-09-05). Not `behavior: "smooth"` though: 'auto' takes the computed
-      // scroll-behavior, which is the smooth in globals.css and is already wrapped in a
-      // prefers-reduced-motion guard. Naming it here would force the animation on someone whose OS
-      // asked for none.
+      // SMOOTH (user, 2026-09-05), unless the OS asked for reduced motion. Asked for here rather
+      // than by a global `scroll-behavior: smooth`, which also animated back/forward restoration.
       //
       // The glide cannot strobe the button on the way, which is the one thing worth checking about
       // animating this particular control: the whole trip is upward travel, so the direction rule
       // keeps it visible until it crosses back inside the first screen and the button retires.
-      onClick={() => window.scrollTo({ top: 0, behavior: "auto" })}
+      onClick={() =>
+        window.scrollTo({
+          top: 0,
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        })
+      }
       aria-label="Back to top"
       aria-hidden={!shown}
       tabIndex={shown ? 0 : -1}

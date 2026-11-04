@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, LayoutGrid, ListFilter, SlidersHorizontal, X } from "lucide-react";
@@ -17,6 +17,7 @@ import {
   readRememberedProduct,
   restoreListingScroll,
   savePlpState,
+  scrollToSaved,
 } from "@/lib/plpScroll";
 import { SORTS } from "@/lib/sorts";
 import { formatPrice } from "@/utils/formatPrice";
@@ -145,8 +146,16 @@ export default function CollectionPage({
   // How many pages scrolling has appended, saved on the way out so the way back can replay them.
   const pagesLoaded = useRef(0);
 
-  // A new server render is a new first page: drop whatever scrolling had appended.
+  // Set when the grid was put back from storage; the scroll waits for those cards to commit.
+  const pendingScroll = useRef(null);
+
+  // A new server render is a new first page: drop whatever scrolling had appended. Only when the
+  // server data actually CHANGED -- on mount (and StrictMode's re-run) there is nothing to drop,
+  // and resetting would wipe the grid the restore below just put back.
+  const served = useRef({ products, pageInfo });
   useEffect(() => {
+    if (served.current.products === products && served.current.pageInfo === pageInfo) return;
+    served.current = { products, pageInfo };
     setLoaded([]);
     setPage(pageInfo);
     pagesLoaded.current = 0;
@@ -187,14 +196,33 @@ export default function CollectionPage({
    *
    * The pages go in with ONE setState so the grid grows in a single layout pass -- appending them
    * one at a time jolts the viewport once per page while the shopper is trying to read it.
+   *
+   * FAST PATH, the normal one: the cards themselves were saved on the way out, so put them straight
+   * back. A layout effect, so the grid is restored and scrolled BEFORE the first paint -- the
+   * shopper's first frame is their card, with no top-of-list frame, no fetch wait and no jump.
+   * The replay below is only the fallback for when storage could not hold them.
+   * ponytail: saved cards can be up to 30 min stale (TTL in lib/plpScroll); prices re-check on PDP.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const url = plpUrlKey();
     const saved = readPlpState(url);
     if (!saved) return;
 
-    const wanted = Math.min(saved.pages ?? 0, MAX_RESTORE_PAGES);
     const openedProduct = readRememberedProduct(url);
+    const target = { url, productHandle: openedProduct, scrollY: saved.scrollY ?? 0 };
+    if (Array.isArray(saved.products)) {
+      if (saved.products.length) {
+        setLoaded(saved.products);
+        setPage(saved.page ?? { hasNextPage: false, endCursor: null });
+        pagesLoaded.current = saved.pages ?? 0;
+        pendingScroll.current = target;
+      } else {
+        scrollToSaved(target);
+      }
+      return;
+    }
+
+    const wanted = Math.min(saved.pages ?? 0, MAX_RESTORE_PAGES);
     const replaying = wanted > 0 && pageInfo?.hasNextPage;
     if (replaying) busy.current = true;
 
@@ -245,24 +273,45 @@ export default function CollectionPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The restored cards are committed now; scroll to theirs before the browser paints.
+  useLayoutEffect(() => {
+    const target = pendingScroll.current;
+    // On mount this runs in the same pass that QUEUED the restore; wait for the cards to land.
+    if (!target || !loaded.length) return;
+    pendingScroll.current = null;
+    if (!scrollToSaved(target)) restoreListingScroll({ ...target, gridEl: grid.current });
+  }, [loaded]);
+
   /**
    * Save on the way out.
    *
    * `pagehide` rather than `unload` alone: it fires when the page goes into the back/forward cache
    * too, which is what iOS Safari uses for a swipe-back -- the case this whole thing exists for, and
    * the one where the component is never unmounted and no cleanup would ever run.
+   *
+   * On CLICK (capture), not in an unmount cleanup. Every in-app way off this page is a click, and
+   * at click time scrollY and the grid are still the shopper's. A cleanup runs after the next page
+   * has already reset the scroll to 0 -- and in dev, StrictMode's mount-unmount-mount fires it
+   * mid-restore, overwriting the saved grid with an empty one.
    */
   useEffect(() => {
     const url = plpUrlKey();
-    const save = () => savePlpState(url, { scrollY: window.scrollY, pages: pagesLoaded.current });
+    const save = () =>
+      savePlpState(url, {
+        scrollY: window.scrollY,
+        pages: pagesLoaded.current,
+        products: loaded,
+        page,
+      });
+    document.addEventListener("click", save, true);
     window.addEventListener("pagehide", save);
     window.addEventListener("beforeunload", save);
     return () => {
-      save();
+      document.removeEventListener("click", save, true);
       window.removeEventListener("pagehide", save);
       window.removeEventListener("beforeunload", save);
     };
-  }, [pathname, searchParams]);
+  }, [pathname, searchParams, loaded, page]);
 
   /**
    * ONE sentinel, ONE ref.

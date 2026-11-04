@@ -47,10 +47,17 @@ export function readPlpState(url) {
   }
 }
 
-export function savePlpState(url, { scrollY, pages }) {
+/**
+ * `products` + `page` are the cards scrolling appended and the cursor after them. Kept so the way
+ * back can put the grid back synchronously instead of refetching it -- see CollectionPage.
+ */
+export function savePlpState(url, { scrollY, pages, products, page }) {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(stateKey(url), JSON.stringify({ scrollY, pages, savedAt: Date.now() }));
+    window.sessionStorage.setItem(
+      stateKey(url),
+      JSON.stringify({ scrollY, pages, products, page, savedAt: Date.now() }),
+    );
   } catch {
     // as above
   }
@@ -95,25 +102,27 @@ function forgetProduct(url) {
  * leaves the browser's own clamp in charge, and the clamp is the footer. A predictable place beats
  * a baffling one.
  */
+/** One attempt: true once the page is where the shopper left it. */
+export function scrollToSaved({ url, productHandle, scrollY }) {
+  if (productHandle) {
+    const el = document.querySelector(`[data-plp-handle="${CSS.escape(productHandle)}"]`);
+    if (!el) return false;
+    // Leave the card a little below the top edge rather than flush against the sticky header.
+    const y = el.getBoundingClientRect().top + window.scrollY - Math.max(80, window.innerHeight * 0.15);
+    window.scrollTo({ top: Math.max(0, y), behavior: "instant" });
+    forgetProduct(url);
+    return true;
+  }
+  if (scrollY > 0) {
+    window.scrollTo({ top: scrollY, behavior: "instant" });
+    return true;
+  }
+  return false;
+}
+
 export function restoreListingScroll({ url, productHandle, scrollY, gridEl }) {
   let attempts = 0;
-
-  const tryOnce = () => {
-    if (productHandle) {
-      const el = document.querySelector(`[data-plp-handle="${CSS.escape(productHandle)}"]`);
-      if (!el) return false;
-      // Leave the card a little below the top edge rather than flush against the sticky header.
-      const y = el.getBoundingClientRect().top + window.scrollY - Math.max(80, window.innerHeight * 0.15);
-      window.scrollTo(0, Math.max(0, y));
-      forgetProduct(url);
-      return true;
-    }
-    if (scrollY > 0) {
-      window.scrollTo(0, scrollY);
-      return true;
-    }
-    return false;
-  };
+  const tryOnce = () => scrollToSaved({ url, productHandle, scrollY });
 
   const kick = () => {
     if (tryOnce()) return;
@@ -125,7 +134,7 @@ export function restoreListingScroll({ url, productHandle, scrollY, gridEl }) {
     if (!gridEl) return;
     const top = Math.max(0, gridEl.getBoundingClientRect().top + window.scrollY - 80);
     // Anyone already at or above the grid is left alone, so this can never scroll a page DOWN.
-    if (window.scrollY > top) window.scrollTo(0, top);
+    if (window.scrollY > top) window.scrollTo({ top, behavior: "instant" });
   };
 
   requestAnimationFrame(() => requestAnimationFrame(kick));
